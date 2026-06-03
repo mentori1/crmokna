@@ -438,7 +438,7 @@ body {
     animation: modalIn .2s ease;
 }
 .modal-body {
-    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
     flex: 1; min-height: 0;
 }
 @keyframes modalIn {
@@ -483,10 +483,17 @@ body {
 .form-group input,
 .form-group select,
 .form-group textarea {
-    width: 100%; min-width: 0; box-sizing: border-box;
+    width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box;
     padding: 9px 12px; border: 1px solid var(--slate-300);
     border-radius: 6px; font-size: 14px; outline: none;
     font-family: inherit;
+}
+/* iOS Safari: date-инпуты имеют жёсткую min-width и выезжают за рамки —
+   appearance:none снимает это, поле сжимается до ширины контейнера */
+.form-group input[type="date"],
+.form-group input[type="datetime-local"] {
+    -webkit-appearance: none;
+    appearance: none;
 }
 .form-group input:focus,
 .form-group select:focus,
