@@ -621,18 +621,23 @@ body {
         -webkit-overflow-scrolling: touch;
     }
 
-    /* Модалка почти на весь экран */
-    .modal-overlay { padding: 0; }
-    .modal {
-        max-width: 100%; max-height: 100vh; height: 100vh;
-        min-height: 100vh; border-radius: 0;
+    /* Модалка с воздухом по краям (НЕ во всю ширину) */
+    .modal-overlay {
+        padding: 14px 12px; align-items: flex-start;
     }
-    /* Padding-bottom побольше, чтобы кнопки «Создать заказ» не лежали под
-       нижней панелью браузера на iPhone */
-    .modal-body { padding: 16px 16px 32px; }
+    .modal {
+        max-width: 100%; width: 100%;
+        max-height: calc(100vh - 28px);
+        border-radius: 14px;
+        min-height: 0;
+    }
+    /* Padding-bottom побольше, чтобы кнопки «Создать заказ» не липли
+       к низу экрана / панели Safari */
+    .modal-body { padding: 14px 16px 40px; }
     .modal-header {
         padding: 14px 16px; position: sticky; top: 0;
         background: #fff; z-index: 2; flex-shrink: 0;
+        border-top-left-radius: 14px; border-top-right-radius: 14px;
     }
     .modal-title { font-size: 17px; }
     /* Большая зона касания для крестика */
