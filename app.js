@@ -753,6 +753,13 @@ window.changeOrderStatus = function(orderId) {
     renderSection(document.querySelector('.nav-item.active').dataset.section);
 };
 
+// Перерисовать активную секцию (после любого изменения данных).
+// Используется чтобы все разделы синхронно отражали новые заказы/платежи.
+function rerenderActiveSection() {
+    const active = document.querySelector('.nav-item.active');
+    if (active) renderSection(active.dataset.section);
+}
+
 // Добавить платёж (от клиента или поставщику) к заказу
 window.addPayment = function(orderId) {
     const o = orders.find(x => x.id === orderId);
@@ -761,7 +768,6 @@ window.addPayment = function(orderId) {
     if (!amount || amount <= 0) { alert('Укажите сумму платежа'); return; }
     const type = document.getElementById('paymentType').value;
     const desc = document.getElementById('paymentDesc').value.trim() || (type === 'income' ? 'Оплата от клиента' : 'Оплата поставщику');
-    const client = clients.find(c => c.id === o.client_id) || {};
     const supplierId = o.items.find(i => i.supplier_id)?.supplier_id;
 
     const newId = transactions.length ? Math.max(...transactions.map(t => t.id)) + 1 : 1;
@@ -775,8 +781,9 @@ window.addPayment = function(orderId) {
         amount: amount,
         description: desc,
     });
-    // Перерисовываем карточку с обновлёнными данными
+    // Перерисовываем карточку (текущая модалка) И активную секцию под ней (Дашборд / Заказы / Финансы / Клиенты / Поставщики)
     openOrderDetail(o.id);
+    rerenderActiveSection();
 };
 
 
@@ -1065,7 +1072,7 @@ window.saveNewTransaction = function() {
         description: document.getElementById('txFormDesc').value.trim() || '',
     });
     closeModal();
-    renderFinances();
+    rerenderActiveSection();
 };
 
 
@@ -1202,7 +1209,7 @@ window.saveNewProduct = function() {
         min_quantity: parseFloat(document.getElementById('prodFormMinQty').value) || 0,
     });
     closeModal();
-    renderWarehouse();
+    rerenderActiveSection();
 };
 
 // Кнопка «Приход» в Складе
@@ -1234,7 +1241,7 @@ window.saveStockIn = function() {
     if (ws) { ws.quantity += qty; }
     else { warehouseStock.push({ product_id: prodId, quantity: qty, reserved: 0, min_quantity: 0 }); }
     closeModal();
-    renderWarehouse();
+    rerenderActiveSection();
 };
 
 
