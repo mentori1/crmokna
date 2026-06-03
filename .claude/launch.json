@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ovsyannikov-crm",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "/Users/mentori/ovsyannikov-crm", "-l", "3457", "--no-clipboard"],
+      "port": 3457
+    }
+  ]
+}

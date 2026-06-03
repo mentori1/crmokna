@@ -1,0 +1,20 @@
+# Google API service-account ключ — НИКОГДА не коммитить
+sanya-498120-cee43b3a5917.json
+*.iam.gserviceaccount.com.json
+
+# Бэкап реальных данных Овсянникова — приватно
+data_real_backup/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Логи и временное
+*.log
+.cache/
+__pycache__/
+*.pyc
+
+# Excel-исходники (могут содержать ПДн)
+*.xlsx
+*.csv

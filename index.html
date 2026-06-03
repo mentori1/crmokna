@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Овсянников</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=6">
+</head>
+<body>
+
+<!-- ─── Login screen (для публичной демо-версии) ───────── -->
+<div id="loginScreen" class="login-screen" style="display:none">
+    <div class="login-card">
+        <div class="login-logo">
+            <span style="font-size:42px">🏗</span>
+            <h1>CRM Овсянников</h1>
+            <p class="login-sub">Демо-версия. Введите логин и пароль для входа.</p>
+        </div>
+        <form id="loginForm" class="login-form">
+            <div class="form-group">
+                <label>Логин</label>
+                <input type="text" id="loginUser" autocomplete="username" required>
+            </div>
+            <div class="form-group">
+                <label>Пароль</label>
+                <input type="password" id="loginPass" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn btn-primary login-submit">Войти</button>
+            <div id="loginError" class="login-error"></div>
+        </form>
+    </div>
+</div>
+
+<!-- ─── Sidebar ────────────────────────────────────────── -->
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+        <span class="logo-icon">🪟</span>
+        <span class="logo-text">Овсянников</span>
+    </div>
+    <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-section="dashboard">
+            <span class="nav-icon">📊</span>
+            <span class="nav-label">Дашборд</span>
+        </a>
+        <a href="#" class="nav-item" data-section="orders">
+            <span class="nav-icon">📋</span>
+            <span class="nav-label">Заказы</span>
+        </a>
+        <a href="#" class="nav-item" data-section="delivery">
+            <span class="nav-icon">🚚</span>
+            <span class="nav-label">Доставка</span>
+        </a>
+        <a href="#" class="nav-item" data-section="clients">
+            <span class="nav-icon">👥</span>
+            <span class="nav-label">Клиенты</span>
+        </a>
+        <a href="#" class="nav-item" data-section="suppliers">
+            <span class="nav-icon">🏭</span>
+            <span class="nav-label">Поставщики</span>
+        </a>
+        <a href="#" class="nav-item" data-section="finances">
+            <span class="nav-icon">💰</span>
+            <span class="nav-label">Финансы</span>
+        </a>
+        <a href="#" class="nav-item" data-section="warehouse">
+            <span class="nav-icon">📦</span>
+            <span class="nav-label">Склад</span>
+        </a>
+    </nav>
+    <div class="sidebar-footer">
+        <div class="user-badge">
+            <div class="user-avatar">ОВ</div>
+            <div class="user-info">
+                <div class="user-name">Овсянников</div>
+                <div class="user-role">Владелец</div>
+            </div>
+        </div>
+    </div>
+</aside>
+
+<!-- Затемнение под мобильным меню -->
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+<!-- ─── Main ───────────────────────────────────────────── -->
+<div class="main">
+    <!-- Top bar -->
+    <header class="topbar">
+        <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+        <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="globalSearch" placeholder="Поиск по заказам, клиентам, телефону, товару…" autocomplete="off">
+            <div class="search-dropdown" id="searchDropdown"></div>
+        </div>
+        <div class="topbar-actions">
+            <button class="btn btn-primary" id="btnNewOrder">+ Новый заказ</button>
+        </div>
+    </header>
+
+    <!-- Content sections -->
+    <main class="content">
+
+        <!-- ─── Dashboard ─── -->
+        <section class="section active" id="section-dashboard">
+            <h1 class="section-title">Дашборд</h1>
+            <div class="period-selector">
+                <button class="period-btn" data-period="30">30 дней</button>
+                <button class="period-btn" data-period="90">Квартал</button>
+                <button class="period-btn" data-period="180">Полгода</button>
+                <button class="period-btn" data-period="365">Год</button>
+                <button class="period-btn active" data-period="all">Всё время</button>
+            </div>
+            <div class="metrics-grid" id="dashMetrics"></div>
+            <div class="dashboard-row">
+                <div class="card card-half">
+                    <div class="card-header">
+                        <h3>Последние заказы</h3>
+                        <a href="#" class="link" data-section="orders">Все заказы →</a>
+                    </div>
+                    <div id="dashRecentOrders"></div>
+                </div>
+                <div class="card card-half">
+                    <div class="card-header">
+                        <h3>Ближайшие доставки</h3>
+                    </div>
+                    <div id="dashUpcoming"></div>
+                </div>
+            </div>
+            <div class="dashboard-row">
+                <div class="card card-half">
+                    <div class="card-header"><h3>Выручка по месяцам</h3></div>
+                    <div class="chart-container">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                </div>
+                <div class="card card-half">
+                    <div class="card-header"><h3>Заказы по статусам</h3></div>
+                    <div class="chart-container">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ─── Orders ─── -->
+        <section class="section" id="section-orders">
+            <div class="section-header">
+                <h1 class="section-title">Заказы</h1>
+                <button class="btn btn-primary" id="btnNewOrder2">+ Новый заказ</button>
+            </div>
+            <div class="filters-bar">
+                <div class="filter-group">
+                    <label>Статус:</label>
+                    <select id="filterStatus">
+                        <option value="">Все</option>
+                        <option value="new">Новый</option>
+                        <option value="in_progress">В работе</option>
+                        <option value="ordered_from_supplier">Заказан у поставщика</option>
+                        <option value="received_at_warehouse">Получен на склад</option>
+                        <option value="delivering">Доставляется</option>
+                        <option value="delivered">Доставлен</option>
+                        <option value="closed">Закрыт</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Период:</label>
+                    <input type="date" id="filterDateFrom">
+                    <span>—</span>
+                    <input type="date" id="filterDateTo">
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table" id="ordersTable">
+                    <thead>
+                        <tr>
+                            <th>№ заказа</th>
+                            <th>Дата</th>
+                            <th>Клиент</th>
+                            <th>Сумма продажи</th>
+                            <th>Оплачено</th>
+                            <th>Маржа</th>
+                            <th>Статус</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="ordersBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ─── Delivery ─── -->
+        <section class="section" id="section-delivery">
+            <h1 class="section-title">Доставка</h1>
+            <p class="text-muted" style="margin:-12px 0 20px">Открытые заказы и статусы их доставки. Позже статусы будут подтягиваться автоматически из почты.</p>
+            <div class="metrics-grid" id="deliveryMetrics"></div>
+            <div class="filters-bar">
+                <div class="filter-group">
+                    <label>Статус доставки:</label>
+                    <select id="filterDeliveryStatus">
+                        <option value="">Все</option>
+                        <option value="none">Не назначен</option>
+                        <option value="car_going">Машина едет за грузом</option>
+                        <option value="shipped_supplier">Груз отгружен</option>
+                        <option value="at_warehouse">Груз на складе</option>
+                        <option value="sent_client">Отправлен клиенту</option>
+                        <option value="received">Получен клиентом</option>
+                    </select>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table" id="deliveryTable">
+                    <thead>
+                        <tr>
+                            <th>№ заказа</th>
+                            <th>Дата</th>
+                            <th>Клиент</th>
+                            <th>Продукция</th>
+                            <th>Поставщик</th>
+                            <th>Статус заказа</th>
+                            <th>Статус доставки</th>
+                        </tr>
+                    </thead>
+                    <tbody id="deliveryBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ─── Clients ─── -->
+        <section class="section" id="section-clients">
+            <div class="section-header">
+                <h1 class="section-title">Клиенты</h1>
+                <button class="btn btn-primary" id="btnNewClient">+ Новый клиент</button>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table" id="clientsTable">
+                    <thead>
+                        <tr>
+                            <th>Имя</th>
+                            <th>Телефон</th>
+                            <th>Заказов</th>
+                            <th>Сумма покупок</th>
+                            <th>Задолженность</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="clientsBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ─── Suppliers ─── -->
+        <section class="section" id="section-suppliers">
+            <div class="section-header">
+                <h1 class="section-title">Поставщики</h1>
+                <button class="btn btn-primary" id="btnNewSupplier">+ Новый поставщик</button>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table" id="suppliersTable">
+                    <thead>
+                        <tr>
+                            <th>Название</th>
+                            <th>Контактное лицо</th>
+                            <th>Телефон</th>
+                            <th>Заказов</th>
+                            <th>Сумма закупок</th>
+                            <th>Задолженность</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="suppliersBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ─── Finances ─── -->
+        <section class="section" id="section-finances">
+            <h1 class="section-title">Финансы</h1>
+            <div class="metrics-grid" id="financeMetrics"></div>
+            <div class="section-header" style="margin-top:24px">
+                <h2>Движение денежных средств</h2>
+                <button class="btn btn-primary" id="btnNewTransaction">+ Операция</button>
+            </div>
+            <div class="filters-bar">
+                <div class="filter-group">
+                    <label>Тип:</label>
+                    <select id="filterTxType">
+                        <option value="">Все</option>
+                        <option value="income">Приход</option>
+                        <option value="expense">Расход</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Период:</label>
+                    <input type="date" id="filterTxFrom">
+                    <span>—</span>
+                    <input type="date" id="filterTxTo">
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table" id="financeTable">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Тип</th>
+                            <th>Контрагент</th>
+                            <th>Заказ</th>
+                            <th>Приход</th>
+                            <th>Расход</th>
+                            <th>Описание</th>
+                        </tr>
+                    </thead>
+                    <tbody id="financeBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ─── Warehouse ─── -->
+        <section class="section" id="section-warehouse">
+            <div class="section-header">
+                <h1 class="section-title">Склад</h1>
+                <div>
+                    <button class="btn btn-outline" id="btnStockIn">Приход</button>
+                    <button class="btn btn-primary" id="btnNewProduct">+ Товар</button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table" id="warehouseTable">
+                    <thead>
+                        <tr>
+                            <th>Артикул</th>
+                            <th>Наименование</th>
+                            <th>Категория</th>
+                            <th>Остаток</th>
+                            <th>Резерв</th>
+                            <th>Доступно</th>
+                            <th>Закуп. цена</th>
+                            <th>Цена продажи</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="warehouseBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+</div>
+
+<!-- ─── Modal overlay ──────────────────────────────────── -->
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal" id="modal">
+        <div class="modal-header">
+            <h2 class="modal-title" id="modalTitle"></h2>
+            <button class="modal-close" id="modalClose">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody"></div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="app.js?v=6"></script>
+</body>
+</html>
