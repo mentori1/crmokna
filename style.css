@@ -621,13 +621,63 @@ body {
     .filter-group select,
     .filter-group input { flex: 1; }
 
-    /* Таблицы: компактнее */
-    .data-table thead th,
-    .data-table tbody td { padding: 9px 9px; font-size: 12px; }
-    .table-wrapper {
-        border-radius: var(--radius);
-        -webkit-overflow-scrolling: touch;
+    /* ── Таблицы → карточки (без горизонтального скролла) ── */
+    .table-wrapper { overflow: visible; background: transparent; box-shadow: none; }
+    .data-table {
+        background: transparent; box-shadow: none;
+        display: block;
     }
+    .data-table thead { display: none; }              /* шапка не нужна — у каждой ячейки своя подпись */
+    .data-table tbody { display: block; }
+    .data-table tbody tr {
+        display: block;
+        background: #fff;
+        border: 1px solid var(--slate-200);
+        border-radius: 12px;
+        padding: 6px 14px;
+        margin-bottom: 10px;
+        box-shadow: var(--shadow);
+    }
+    .data-table tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
+        padding: 7px 0;
+        border: none;
+        border-bottom: 1px solid var(--slate-100);
+        font-size: 14px;
+        text-align: right;
+        white-space: normal;
+    }
+    .data-table tbody tr td:last-child { border-bottom: none; }
+    /* Подпись колонки слева от значения */
+    .data-table tbody td::before {
+        content: attr(data-label);
+        font-size: 11px; font-weight: 600;
+        color: var(--slate-500);
+        text-transform: uppercase; letter-spacing: .3px;
+        text-align: left;
+        flex-shrink: 0;
+    }
+    /* Ячейки без подписи (с кнопкой) — кнопка во всю ширину */
+    .data-table tbody td[data-label=""] { padding-top: 10px; }
+    .data-table tbody td[data-label=""]::before { display: none; }
+    .data-table tbody td[data-label=""] .btn { width: 100%; }
+    .data-table tbody td[data-label=""] .delivery-select { width: 100%; }
+    /* Пустые ячейки (например пустой приход/расход) — скрываем */
+    .data-table tbody td:empty { display: none; }
+    /* Клиент с телефоном — выравниваем по правому краю красиво */
+    .data-table tbody td .text-muted { display: block; }
+    /* Ячейка со статусом доставки (select) — подпись сверху, select на всю ширину */
+    .data-table tbody td[data-label="Статус доставки"] {
+        flex-direction: column; align-items: stretch; text-align: left; gap: 4px;
+    }
+    /* Заглушка «Нет данных» — по центру, без подписи */
+    .data-table tbody td.empty-state {
+        display: block; text-align: center; border: none;
+    }
+    .data-table tbody td.empty-state::before { display: none; }
 
     /* ── Модалка: отступы по краям, скругление, высота почти на весь
           экран (dvh — учитывает адресную строку Safari) ── */

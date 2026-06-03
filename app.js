@@ -404,14 +404,14 @@ function renderOrders() {
     document.getElementById('ordersBody').innerHTML = pageRows.length ? pageRows.map(o => {
         const c = calcOrder(o);
         return `<tr data-order="${o.id}">
-            <td class="td-bold">${o.order_number}</td>
-            <td>${fmtDate(o.created_at)}</td>
-            <td>${clientName(o.client_id)}<br><span class="text-muted" style="font-size:12px">${clientPhone(o.client_id)}</span></td>
-            <td class="font-mono text-right">${fmtCur(c.totalSale)}</td>
-            <td class="font-mono text-right">${fmtCur(c.paidByClient)}</td>
-            <td class="font-mono text-right ${c.margin > 0 ? 'text-green' : ''}">${fmtCur(c.margin)}</td>
-            <td><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></td>
-            <td><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openOrderDetail(${o.id})">Открыть</button></td>
+            <td class="td-bold" data-label="№ заказа">${o.order_number}</td>
+            <td data-label="Дата">${fmtDate(o.created_at)}</td>
+            <td data-label="Клиент">${clientName(o.client_id)}<br><span class="text-muted" style="font-size:12px">${clientPhone(o.client_id)}</span></td>
+            <td class="font-mono text-right" data-label="Сумма продажи">${fmtCur(c.totalSale)}</td>
+            <td class="font-mono text-right" data-label="Оплачено">${fmtCur(c.paidByClient)}</td>
+            <td class="font-mono text-right ${c.margin > 0 ? 'text-green' : ''}" data-label="Маржа">${fmtCur(c.margin)}</td>
+            <td data-label="Статус"><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></td>
+            <td data-label=""><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openOrderDetail(${o.id})">Открыть</button></td>
         </tr>`;
     }).join('') : '<tr><td colspan="8" class="empty-state">Нет заказов</td></tr>';
 
@@ -491,13 +491,13 @@ function renderDelivery() {
         const product = o.items.map(i => i.product_name).join(', ');
         const supplierIds = [...new Set(o.items.map(i => i.supplier_id).filter(Boolean))];
         return `<tr data-order="${o.id}" style="cursor:pointer">
-            <td class="td-bold">${o.order_number}</td>
-            <td>${fmtDate(o.created_at)}</td>
-            <td>${clientName(o.client_id)}<br><span class="text-muted" style="font-size:12px">${clientPhone(o.client_id)}</span></td>
-            <td>${product}</td>
-            <td>${supplierIds.map(supplierName).join(', ') || '—'}</td>
-            <td><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></td>
-            <td>
+            <td class="td-bold" data-label="№ заказа">${o.order_number}</td>
+            <td data-label="Дата">${fmtDate(o.created_at)}</td>
+            <td data-label="Клиент">${clientName(o.client_id)}<br><span class="text-muted" style="font-size:12px">${clientPhone(o.client_id)}</span></td>
+            <td data-label="Продукция">${product}</td>
+            <td data-label="Поставщик">${supplierIds.map(supplierName).join(', ') || '—'}</td>
+            <td data-label="Статус заказа"><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></td>
+            <td data-label="Статус доставки">
                 <select class="delivery-select" data-order="${o.id}" onclick="event.stopPropagation()">
                     ${Object.entries(DELIVERY_STATUS_LABELS).map(([k, v]) =>
                         `<option value="${k}" ${ds === k ? 'selected' : ''}>${v}</option>`).join('')}
@@ -799,12 +799,12 @@ function renderClients() {
 
     document.getElementById('clientsBody').innerHTML = rows.map(cl => `
         <tr data-client="${cl.id}">
-            <td class="td-bold">${cl.name}</td>
-            <td>${cl.phone}</td>
-            <td class="font-mono">${cl.orderCount}</td>
-            <td class="font-mono text-right">${fmtCur(cl.totalPurchases)}</td>
-            <td class="font-mono text-right ${cl.totalDebt > 0 ? 'text-red' : ''}">${cl.totalDebt > 0 ? fmtCur(cl.totalDebt) : '—'}</td>
-            <td><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openClientDetail(${cl.id})">Карточка</button></td>
+            <td class="td-bold" data-label="Имя">${cl.name}</td>
+            <td data-label="Телефон">${cl.phone}</td>
+            <td class="font-mono" data-label="Заказов">${cl.orderCount}</td>
+            <td class="font-mono text-right" data-label="Сумма покупок">${fmtCur(cl.totalPurchases)}</td>
+            <td class="font-mono text-right ${cl.totalDebt > 0 ? 'text-red' : ''}" data-label="Задолженность">${cl.totalDebt > 0 ? fmtCur(cl.totalDebt) : '—'}</td>
+            <td data-label=""><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openClientDetail(${cl.id})">Карточка</button></td>
         </tr>`).join('');
 
     document.querySelectorAll('#clientsBody tr[data-client]').forEach(tr => {
@@ -878,13 +878,13 @@ function renderSuppliers() {
 
     document.getElementById('suppliersBody').innerHTML = rows.map(s => `
         <tr data-supplier="${s.id}">
-            <td class="td-bold">${s.name}</td>
-            <td>${s.contact_person || '—'}</td>
-            <td>${s.phone}</td>
-            <td class="font-mono">${s.orderCount}</td>
-            <td class="font-mono text-right">${fmtCur(s.totalPurchases)}</td>
-            <td class="font-mono text-right ${s.debt > 0 ? 'text-red' : ''}">${s.debt > 0 ? fmtCur(s.debt) : '—'}</td>
-            <td><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openSupplierDetail(${s.id})">Карточка</button></td>
+            <td class="td-bold" data-label="Название">${s.name}</td>
+            <td data-label="Контактное лицо">${s.contact_person || '—'}</td>
+            <td data-label="Телефон">${s.phone}</td>
+            <td class="font-mono" data-label="Заказов">${s.orderCount}</td>
+            <td class="font-mono text-right" data-label="Сумма закупок">${fmtCur(s.totalPurchases)}</td>
+            <td class="font-mono text-right ${s.debt > 0 ? 'text-red' : ''}" data-label="Задолженность">${s.debt > 0 ? fmtCur(s.debt) : '—'}</td>
+            <td data-label=""><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openSupplierDetail(${s.id})">Карточка</button></td>
         </tr>`).join('');
 
     document.querySelectorAll('#suppliersBody tr[data-supplier]').forEach(tr => {
@@ -1000,13 +1000,13 @@ function renderFinances() {
     document.getElementById('financeBody').innerHTML = filtered.length ? filtered.map(t => {
         const orderNum = t.order_id ? (orders.find(o => o.id === t.order_id) || {}).order_number || '' : '';
         return `<tr>
-            <td>${fmtDate(t.date)}</td>
-            <td><span class="badge badge-${t.type}">${t.type === 'income' ? 'Приход' : 'Расход'}</span></td>
-            <td>${entityName(t.entity_type, t.entity_id)}</td>
-            <td class="td-bold">${orderNum}</td>
-            <td class="font-mono text-right text-green">${t.type === 'income' ? fmtCur(t.amount) : ''}</td>
-            <td class="font-mono text-right text-red">${t.type === 'expense' ? fmtCur(t.amount) : ''}</td>
-            <td class="text-muted">${t.description}</td>
+            <td data-label="Дата">${fmtDate(t.date)}</td>
+            <td data-label="Тип"><span class="badge badge-${t.type}">${t.type === 'income' ? 'Приход' : 'Расход'}</span></td>
+            <td data-label="Контрагент">${entityName(t.entity_type, t.entity_id)}</td>
+            <td class="td-bold" data-label="Заказ">${orderNum}</td>
+            <td class="font-mono text-right text-green" data-label="Приход">${t.type === 'income' ? fmtCur(t.amount) : ''}</td>
+            <td class="font-mono text-right text-red" data-label="Расход">${t.type === 'expense' ? fmtCur(t.amount) : ''}</td>
+            <td class="text-muted" data-label="Описание">${t.description}</td>
         </tr>`;
     }).join('') : '<tr><td colspan="7" class="empty-state">Нет операций</td></tr>';
 }
@@ -1084,15 +1084,15 @@ function renderWarehouse() {
         const available = ws.quantity - ws.reserved;
         const isLow = available <= ws.min_quantity;
         return `<tr>
-            <td class="td-bold">${p.sku || '—'}</td>
-            <td>${p.name || '—'}</td>
-            <td>${categoryName(p.category_id)}</td>
-            <td class="font-mono">${ws.quantity} ${p.unit || ''}</td>
-            <td class="font-mono">${ws.reserved}</td>
-            <td class="font-mono ${isLow ? 'low-stock' : ''}">${available} ${isLow ? '⚠' : ''}</td>
-            <td class="font-mono text-right">${fmtCur(p.purchase_price)}</td>
-            <td class="font-mono text-right">${fmtCur(p.sale_price)}</td>
-            <td><button class="btn btn-sm btn-outline" onclick="openProductDetail(${p.id})">Детали</button></td>
+            <td class="td-bold" data-label="Артикул">${p.sku || '—'}</td>
+            <td data-label="Наименование">${p.name || '—'}</td>
+            <td data-label="Категория">${categoryName(p.category_id)}</td>
+            <td class="font-mono" data-label="Остаток">${ws.quantity} ${p.unit || ''}</td>
+            <td class="font-mono" data-label="Резерв">${ws.reserved}</td>
+            <td class="font-mono ${isLow ? 'low-stock' : ''}" data-label="Доступно">${available} ${isLow ? '⚠' : ''}</td>
+            <td class="font-mono text-right" data-label="Закуп. цена">${fmtCur(p.purchase_price)}</td>
+            <td class="font-mono text-right" data-label="Цена продажи">${fmtCur(p.sale_price)}</td>
+            <td data-label=""><button class="btn btn-sm btn-outline" onclick="openProductDetail(${p.id})">Детали</button></td>
         </tr>`;
     }).join('');
 }
