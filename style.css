@@ -578,22 +578,25 @@ body {
 @media (max-width: 560px) {
     html { font-size: 15px; }
 
-    .content { padding: 14px; }
-    .section-title { font-size: 19px; }
+    .content { padding: 12px; }
+    .section-title { font-size: 18px; margin-bottom: 14px; }
 
     /* Топбар: поиск на всю ширину, кнопка отдельной строкой */
     .topbar {
-        height: auto; flex-wrap: wrap; padding: 10px 14px; gap: 10px;
+        height: auto; flex-wrap: wrap; padding: 9px 12px; gap: 9px;
     }
     .search-box { order: 2; max-width: none; flex-basis: 100%; }
+    .search-box input { padding-top: 8px; padding-bottom: 8px; }
     .sidebar-toggle { order: 1; }
     .topbar-actions { order: 1; margin-left: auto; }
-    .topbar-actions .btn { padding: 9px 14px; }
+    .topbar-actions .btn { padding: 8px 13px; }
 
-    /* Метрики в 2 колонки, крупная цифра */
-    .metrics-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
-    .metric-card { padding: 14px; }
-    .metric-value { font-size: 20px; }
+    /* Метрики в 2 колонки, компактные */
+    .metrics-grid { grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 16px; }
+    .metric-card { padding: 12px 13px; border-left-width: 3px; }
+    .metric-label { font-size: 10px; margin-bottom: 3px; }
+    .metric-value { font-size: 18px; }
+    .metric-sub { font-size: 11px; }
 
     /* Кнопки периода — горизонтальная прокрутка, не сжимаются */
     .period-selector {
@@ -608,100 +611,112 @@ body {
     .filters-bar .btn { width: 100%; justify-content: center; }
 
     /* Фильтры в столбик */
-    .filters-bar { flex-direction: column; align-items: stretch; gap: 10px; }
+    .filters-bar { flex-direction: column; align-items: stretch; gap: 9px; }
     .filter-group { width: 100%; }
     .filter-group select,
     .filter-group input { flex: 1; }
 
-    /* Таблицы: компактнее + подсказка о свайпе */
+    /* Таблицы: компактнее */
     .data-table thead th,
-    .data-table tbody td { padding: 10px 10px; font-size: 12px; }
+    .data-table tbody td { padding: 9px 9px; font-size: 12px; }
     .table-wrapper {
         border-radius: var(--radius);
         -webkit-overflow-scrolling: touch;
     }
 
-    /* Модалка с воздухом по краям (НЕ во всю ширину) */
+    /* ── Модалка: отступы по краям, скругление, высота почти на весь
+          экран (dvh — учитывает адресную строку Safari) ── */
     .modal-overlay {
-        padding: 14px 12px; align-items: flex-start;
+        padding: 10px; align-items: stretch;
     }
     .modal {
         max-width: 100%; width: 100%;
-        max-height: calc(100vh - 28px);
-        border-radius: 14px;
+        max-height: calc(100dvh - 20px);
+        height: calc(100dvh - 20px);
+        border-radius: 16px;
         min-height: 0;
+        margin: auto 0;
     }
-    /* Padding-bottom побольше, чтобы кнопки «Создать заказ» не липли
-       к низу экрана / панели Safari */
-    .modal-body { padding: 14px 16px 40px; }
     .modal-header {
-        padding: 14px 16px; position: sticky; top: 0;
+        padding: 13px 16px; position: sticky; top: 0;
         background: #fff; z-index: 2; flex-shrink: 0;
-        border-top-left-radius: 14px; border-top-right-radius: 14px;
+        border-radius: 16px 16px 0 0;
     }
-    .modal-title { font-size: 17px; }
-    /* Большая зона касания для крестика */
-    .modal-close {
-        width: 44px; height: 44px; font-size: 24px;
-    }
+    .modal-title { font-size: 16px; }
+    .modal-close { width: 40px; height: 40px; font-size: 22px; }
+    /* Тело модалки — компактные вертикальные отступы между группами */
+    .modal-body { padding: 14px 16px 24px; }
 
-    /* Позиции продукции в заказе — карточкой, крупные поля */
+    /* Поля формы — 16px шрифт (iOS не зумит), но компактные паддинги */
+    .form-group input,
+    .form-group select,
+    .form-group textarea { padding: 10px 12px; font-size: 16px; }
+    .form-group label { font-size: 10px; }
+    /* Уменьшаем вертикальные промежутки между полями формы */
+    .form-grid { gap: 11px; }
+    .detail-section-title { margin: 14px 0 8px; font-size: 13px; }
+
+    /* Позиции продукции в заказе — карточкой, компактно */
     .order-item-row {
         grid-template-columns: 1fr 1fr !important;
-        gap: 10px !important;
-        padding: 12px; border: 1px solid var(--slate-200);
-        border-radius: 8px; margin-bottom: 12px;
+        gap: 9px !important;
+        padding: 11px; border: 1px solid var(--slate-200);
+        border-radius: 10px; margin-bottom: 10px;
     }
     /* Продукция, Размеры и Кол-во — каждый на свою строку */
     .order-item-row .item-col-name,
     .order-item-row .item-col-dims,
     .order-item-row .item-col-qty { grid-column: 1 / -1; }
-    /* Закупка и Продажа — пара в одну строку */
     .order-item-row .item-remove {
-        grid-column: 1 / -1; width: 100%; height: 44px;
+        grid-column: 1 / -1; width: 100%; height: 40px;
         color: var(--red-600); border-color: var(--red-100);
-        font-size: 14px;
+        font-size: 13px;
     }
-    /* На телефоне у кнопки появляется текст после ✕ */
     .order-item-row .item-remove::after {
         content: ' Удалить позицию';
         font-weight: 500;
     }
 
-    /* Блок «Добавить платёж» в карточке заказа: всё в столбик, кнопка на ширину */
-    .payment-form { grid-template-columns: 1fr; }
-    .payment-submit { width: 100%; height: 48px; }
+    /* Блок «Добавить платёж»: всё в столбик */
+    .payment-form { grid-template-columns: 1fr; gap: 11px; }
+    .payment-submit { width: 100%; height: 46px; }
 
-    /* Поля формы крупнее для пальца */
-    .form-group input,
-    .form-group select,
-    .form-group textarea { padding: 12px; font-size: 16px; } /* 16px — iOS не зумит */
+    .delivery-select { max-width: 100%; width: 100%; font-size: 13px; padding: 8px; }
 
-    .delivery-select { max-width: 100%; width: 100%; font-size: 14px; padding: 10px; }
-
-    /* Кнопки «+ Добавить позицию» / «+ Платёж» крупные */
+    /* Кнопки «+ Добавить позицию» / «+ Платёж» */
     .modal-body .btn-sm { padding: 10px 14px; font-size: 14px; height: auto; }
 
-    /* Карточка заказа: финансы в одну колонку */
-    .modal-body .detail-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+    /* Карточка заказа: финансы в 2 колонки компактно */
+    .modal-body .detail-grid { grid-template-columns: 1fr 1fr; gap: 10px 12px; margin-bottom: 14px; }
+    .detail-label { font-size: 10px; }
+    .detail-value { font-size: 13px; }
     .detail-value.big { font-size: 16px; }
 
-    /* Нижние кнопки карточки заказа (Редактировать / Статус / Сохранить) — в столбик */
+    /* Нижние кнопки карточки заказа — в столбик */
     .form-actions {
         flex-direction: column; align-items: stretch; gap: 8px;
     }
     .form-actions .btn,
     .form-actions select { width: 100%; margin: 0 !important; }
 
-    /* Items-table (товары в карточке): компактнее */
+    /* Items-table (товары в карточке): компактнее, помещается без обрезки */
+    .items-table { width: 100%; table-layout: fixed; }
     .items-table th,
-    .items-table td { padding: 8px 6px; font-size: 12px; }
+    .items-table td {
+        padding: 7px 4px; font-size: 11px;
+        overflow: hidden; text-overflow: ellipsis;
+    }
+    /* Наименование переносится, числа — нет */
+    .items-table th:first-child,
+    .items-table td:first-child { white-space: normal; word-break: break-word; }
+    .items-table th:not(:first-child),
+    .items-table td:not(:first-child) { white-space: nowrap; }
 
     /* Пагинация в столбик */
     .pagination { flex-direction: column; align-items: stretch; gap: 10px; }
     .pagination-controls { justify-content: center; }
 
-    .chart-container { height: 240px; }
+    .chart-container { height: 220px; }
 }
 
 /* ─── Форма «Добавить платёж» в карточке заказа ───────── */
