@@ -624,10 +624,21 @@ body {
     /* Модалка почти на весь экран */
     .modal-overlay { padding: 0; }
     .modal {
-        max-width: 100%; min-height: 100vh; border-radius: 0;
+        max-width: 100%; max-height: 100vh; height: 100vh;
+        min-height: 100vh; border-radius: 0;
     }
-    .modal-body { padding: 16px; }
-    .modal-header { padding: 16px; position: sticky; top: 0; background: #fff; z-index: 2; }
+    /* Padding-bottom побольше, чтобы кнопки «Создать заказ» не лежали под
+       нижней панелью браузера на iPhone */
+    .modal-body { padding: 16px 16px 32px; }
+    .modal-header {
+        padding: 14px 16px; position: sticky; top: 0;
+        background: #fff; z-index: 2; flex-shrink: 0;
+    }
+    .modal-title { font-size: 17px; }
+    /* Большая зона касания для крестика */
+    .modal-close {
+        width: 44px; height: 44px; font-size: 24px;
+    }
 
     /* Позиции продукции в заказе — карточкой, крупные поля */
     .order-item-row {
