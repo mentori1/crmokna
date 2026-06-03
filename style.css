@@ -59,6 +59,8 @@ body {
     color: var(--slate-800);
     display: flex;
     min-height: 100vh;
+    max-width: 100%;
+    overflow-x: hidden;  /* защита от случайного горизонтального скролла */
 }
 
 /* ─── Sidebar ─────────────────────────────────────────── */
@@ -468,7 +470,9 @@ body {
     grid-template-columns: 1fr 1fr;
     gap: 16px;
 }
-.form-group { display: flex; flex-direction: column; gap: 4px; }
+/* min-width: 0 — критично: без него поля не сжимаются ниже своей
+   дефолтной ширины и раздувают грид/флекс шире экрана (контент уезжает) */
+.form-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .form-group.full { grid-column: 1 / -1; }
 
 .form-group label {
@@ -479,6 +483,7 @@ body {
 .form-group input,
 .form-group select,
 .form-group textarea {
+    width: 100%; min-width: 0; box-sizing: border-box;
     padding: 9px 12px; border: 1px solid var(--slate-300);
     border-radius: 6px; font-size: 14px; outline: none;
     font-family: inherit;
@@ -741,6 +746,7 @@ body {
     margin-bottom: 8px;
     align-items: end;
 }
+.order-item-row > * { min-width: 0; }
 /* Когда поле «Размеры» скрыто — раскладка из 5 колонок */
 .order-item-row:has(.item-col-dims[style*="none"]) {
     grid-template-columns: minmax(0, 2.5fr) 70px minmax(0, 1fr) minmax(0, 1fr) 36px;
