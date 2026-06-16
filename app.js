@@ -118,6 +118,20 @@ const clientPhone = id => (clients.find(c => c.id === id) || {}).phone || '';
 const supplierName = id => (suppliers.find(s => s.id === id) || {}).name || '—';
 const categoryName = id => (categories.find(c => c.id === id) || {}).name || '—';
 
+// Стабильный CRM-ID заказа — «якорь» для сопоставления с письмами производства.
+// Сейчас выводится из o.id; при двусторонней синхронизации станет постоянной
+// колонкой в Google Таблице (см. INTEGRATION.md).
+const crmId = o => o.crm_id || ('CRM-' + String(o.id).padStart(5, '0'));
+
+// Статусы заказа от производства (присылаются в письмах)
+const PRODUCTION_STATUS_LABELS = {
+    sent:       'Заявка отправлена',
+    accepted:   'Принят в работу',
+    in_progress:'В производстве',
+    shipped:    'Отгружен',
+    delivered:  'Доставлен',
+};
+
 function entityName(type, id) {
     if (type === 'client') return clientName(id);
     if (type === 'supplier') return supplierName(id);
@@ -536,12 +550,12 @@ function openOrderDetail(orderId) {
     openModal('Заказ ' + o.order_number, `
         <div class="detail-grid">
             <div class="detail-item">
-                <div class="detail-label">Дата создания</div>
-                <div class="detail-value">${fmtDate(o.created_at)}</div>
+                <div class="detail-label">CRM-ID</div>
+                <div class="detail-value td-bold" style="font-variant-numeric:tabular-nums">${crmId(o)}</div>
             </div>
             <div class="detail-item">
-                <div class="detail-label">Дата доставки</div>
-                <div class="detail-value">${fmtDate(o.delivery_date)}</div>
+                <div class="detail-label">Дата создания</div>
+                <div class="detail-value">${fmtDate(o.created_at)}</div>
             </div>
             <div class="detail-item">
                 <div class="detail-label">Клиент</div>
@@ -560,6 +574,32 @@ function openOrderDetail(orderId) {
                 <div class="detail-value"><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></div>
             </div>
         </div>
+
+        <div class="detail-section-title">Производство</div>
+        <div class="detail-grid">
+            <div class="detail-item">
+                <div class="detail-label">Номер производства</div>
+                <div class="detail-value ${o.production_number ? 'td-bold' : 'text-muted'}">${o.production_number || 'ещё не присвоен'}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">Статус от производства</div>
+                <div class="detail-value">${o.production_status ? `<span class="badge badge-in_progress">${PRODUCTION_STATUS_LABELS[o.production_status] || o.production_status}</span>` : '<span class="text-muted">нет данных</span>'}</div>
+            </div>
+        </div>
+        <div style="margin-top:10px">
+            <button class="btn btn-outline" onclick="openProductionRequest(${o.id})">📧 Сформировать заявку на производство</button>
+        </div>
+        ${(o.status_history && o.status_history.length) ? `
+        <div class="detail-section-title" style="margin-top:16px">История статусов производства</div>
+        <table class="items-table">
+            <thead><tr><th>Дата</th><th>Статус</th><th>Источник</th></tr></thead>
+            <tbody>${o.status_history.map(h => `
+                <tr>
+                    <td>${fmtDate(h.date)}</td>
+                    <td>${PRODUCTION_STATUS_LABELS[h.status] || h.status}</td>
+                    <td class="text-muted">${h.source || '—'}</td>
+                </tr>`).join('')}</tbody>
+        </table>` : ''}
 
         <div class="detail-section-title">Товары</div>
         <table class="items-table">
@@ -784,6 +824,89 @@ window.addPayment = function(orderId) {
     // Перерисовываем карточку (текущая модалка) И активную секцию под ней (Дашборд / Заказы / Финансы / Клиенты / Поставщики)
     openOrderDetail(o.id);
     rerenderActiveSection();
+};
+
+// ─── Заявка на производство ──────────────────────────────────
+// Формирует текст письма с CRM-ID в теме и теле. CRM-ID — «якорь»,
+// по которому n8n потом сопоставит ответ производства (см. INTEGRATION.md).
+
+function buildProductionEmail(o) {
+    const id = crmId(o);
+    const client = clients.find(c => c.id === o.client_id) || {};
+    const firstProduct = o.items[0]?.product_name || 'Заказ';
+    const subject = `Заявка ${id} — ${firstProduct}`;
+
+    const lines = o.items.map((i, n) => {
+        const dims = i.dimensions ? ` | размеры: ${i.dimensions}` : '';
+        return `  ${n + 1}. ${i.product_name}${dims} | кол-во: ${i.quantity}`;
+    }).join('\n');
+
+    const body =
+`Здравствуйте!
+
+Просим принять в работу заказ.
+
+Идентификатор заказа: ${id}
+Дата: ${fmtDate(o.created_at)}
+Клиент: ${client.name || '—'}
+
+Состав заказа:
+${lines}
+${o.notes ? `\nПримечание: ${o.notes}` : ''}
+
+Просьба в ответном письме указать ваш внутренний номер заказа
+и сохранить идентификатор ${id} в теме для автоматического учёта.
+
+С уважением,
+СтройОкна (Овсянников)`;
+
+    return { subject, body, id };
+}
+
+window.openProductionRequest = function(orderId) {
+    const o = orders.find(x => x.id === orderId);
+    if (!o) return;
+    const { subject, body, id } = buildProductionEmail(o);
+
+    openModal('Заявка на производство — ' + id, `
+        <p class="text-muted" style="font-size:13px;margin-bottom:14px">
+            Идентификатор <b>${id}</b> вшит в тему и тело письма. По нему CRM
+            автоматически сопоставит ответ производства и обновит статус
+            (когда будет подключена почта).
+        </p>
+        <div class="form-group" style="margin-bottom:12px">
+            <label>Тема письма</label>
+            <input type="text" id="prodSubject" value="${subject.replace(/"/g, '&quot;')}" readonly>
+        </div>
+        <div class="form-group">
+            <label>Текст письма</label>
+            <textarea id="prodBody" rows="14" readonly style="font-family:inherit;line-height:1.5">${body}</textarea>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-outline" onclick="copyProductionEmail()">📋 Скопировать текст</button>
+            <button class="btn btn-primary" onclick="openMailClient(${o.id})">✉️ Открыть в почте</button>
+        </div>
+    `);
+};
+
+window.copyProductionEmail = function() {
+    const subj = document.getElementById('prodSubject').value;
+    const body = document.getElementById('prodBody').value;
+    const text = 'Тема: ' + subj + '\n\n' + body;
+    navigator.clipboard.writeText(text).then(
+        () => { const btn = event.target; const t = btn.textContent; btn.textContent = '✓ Скопировано'; setTimeout(() => btn.textContent = t, 1500); },
+        () => alert('Не удалось скопировать — выделите текст вручную')
+    );
+};
+
+window.openMailClient = function(orderId) {
+    const o = orders.find(x => x.id === orderId);
+    if (!o) return;
+    const { subject, body } = buildProductionEmail(o);
+    // mailto без указания адреса — менеджер сам выберет производство;
+    // позже адрес можно зашить или хранить у поставщика
+    const url = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = url;
 };
 
 

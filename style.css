@@ -495,6 +495,10 @@ body {
     -webkit-appearance: none;
     appearance: none;
 }
+.form-group input[readonly],
+.form-group textarea[readonly] {
+    background: var(--slate-50); color: var(--slate-700);
+}
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
