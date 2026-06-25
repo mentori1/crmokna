@@ -1,5 +1,5 @@
 /* ============================================================
-   CRM Овсянников — Application
+   CRM «Центр окон и дверей» — Application
    ============================================================ */
 
 // ─── Авторизация (для публичной демо-версии) ─────────────────
@@ -417,17 +417,21 @@ function renderOrders() {
 
     document.getElementById('ordersBody').innerHTML = pageRows.length ? pageRows.map(o => {
         const c = calcOrder(o);
+        const supplierNames = [...new Set(o.items.map(i => i.supplier_id).filter(Boolean))].map(supplierName).join(', ') || '—';
         return `<tr data-order="${o.id}">
-            <td class="td-bold" data-label="№ заказа">${o.order_number}</td>
             <td data-label="Дата">${fmtDate(o.created_at)}</td>
-            <td data-label="Клиент">${clientName(o.client_id)}<br><span class="text-muted" style="font-size:12px">${clientPhone(o.client_id)}</span></td>
-            <td class="font-mono text-right" data-label="Сумма продажи">${fmtCur(c.totalSale)}</td>
-            <td class="font-mono text-right" data-label="Оплачено">${fmtCur(c.paidByClient)}</td>
-            <td class="font-mono text-right ${c.margin > 0 ? 'text-green' : ''}" data-label="Маржа">${fmtCur(c.margin)}</td>
-            <td data-label="Статус"><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></td>
+            <td class="td-bold" data-label="№ заказа">${o.order_number}</td>
+            <td data-label="Поставщик">${supplierNames}</td>
+            <td class="font-mono text-right" data-label="Закупка">${fmtCur(c.totalPurchase)}</td>
+            <td class="font-mono text-right" data-label="Продажа">${fmtCur(c.totalSale)}</td>
+            <td class="font-mono text-right" data-label="Получено">${fmtCur(c.paidByClient)}</td>
+            <td class="font-mono text-right ${c.clientDebt > 0 ? 'text-red' : ''}" data-label="Осталось">${c.clientDebt > 0 ? fmtCur(c.clientDebt) : '—'}</td>
+            <td data-label="Доставлено"><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></td>
+            <td data-label="Клиент">${clientName(o.client_id)}</td>
+            <td data-label="Телефон">${clientPhone(o.client_id) || '—'}</td>
             <td data-label=""><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openOrderDetail(${o.id})">Открыть</button></td>
         </tr>`;
-    }).join('') : '<tr><td colspan="8" class="empty-state">Нет заказов</td></tr>';
+    }).join('') : '<tr><td colspan="11" class="empty-state">Нет заказов</td></tr>';
 
     // Пагинация
     let pagBox = document.getElementById('ordersPagination');
@@ -587,7 +591,7 @@ function openOrderDetail(orderId) {
             </div>
         </div>
         <div style="margin-top:10px">
-            <button class="btn btn-outline" onclick="openProductionRequest(${o.id})">📧 Сформировать заявку на производство</button>
+            <button class="btn btn-outline" onclick="openProductionRequest(${o.id})">Сформировать заявку на производство</button>
         </div>
         ${(o.status_history && o.status_history.length) ? `
         <div class="detail-section-title" style="margin-top:16px">История статусов производства</div>
@@ -606,7 +610,7 @@ function openOrderDetail(orderId) {
             <thead><tr><th>Наименование</th><th>Кол-во</th><th>Закупка</th><th>Продажа</th><th>Итого</th></tr></thead>
             <tbody>${o.items.map(i => `
                 <tr>
-                    <td>${i.product_name}${i.dimensions ? `<br><span class="text-muted" style="font-size:12px">📐 ${i.dimensions}</span>` : ''}</td>
+                    <td>${i.product_name}${i.dimensions ? `<br><span class="text-muted" style="font-size:12px">${i.dimensions}</span>` : ''}</td>
                     <td class="font-mono">${i.quantity}</td>
                     <td class="font-mono">${fmtCur(i.purchase_price)}</td>
                     <td class="font-mono">${fmtCur(i.sale_price)}</td>
@@ -678,7 +682,7 @@ function openOrderDetail(orderId) {
         </div>
 
         <div class="form-actions" style="margin-top:24px">
-            <button class="btn btn-outline" onclick="openOrderEditForm(${o.id})" style="margin-right:auto">✏ Редактировать</button>
+            <button class="btn btn-outline" onclick="openOrderEditForm(${o.id})" style="margin-right:auto">Редактировать</button>
             <select id="modalStatusSelect" style="padding:8px 12px;border:1px solid var(--slate-300);border-radius:6px;font-size:13px">
                 ${Object.entries(STATUS_LABELS).map(([k,v]) => `<option value="${k}" ${o.status===k?'selected':''}>${v}</option>`).join('')}
             </select>
@@ -858,7 +862,7 @@ ${o.notes ? `\nПримечание: ${o.notes}` : ''}
 и сохранить идентификатор ${id} в теме для автоматического учёта.
 
 С уважением,
-СтройОкна (Овсянников)`;
+Центр окон и дверей`;
 
     return { subject, body, id };
 }
@@ -883,8 +887,8 @@ window.openProductionRequest = function(orderId) {
             <textarea id="prodBody" rows="14" readonly style="font-family:inherit;line-height:1.5">${body}</textarea>
         </div>
         <div class="form-actions">
-            <button class="btn btn-outline" onclick="copyProductionEmail()">📋 Скопировать текст</button>
-            <button class="btn btn-primary" onclick="openMailClient(${o.id})">✉️ Открыть в почте</button>
+            <button class="btn btn-outline" onclick="copyProductionEmail()">Скопировать текст</button>
+            <button class="btn btn-primary" onclick="openMailClient(${o.id})">Открыть в почте</button>
         </div>
     `);
 };
@@ -894,7 +898,7 @@ window.copyProductionEmail = function() {
     const body = document.getElementById('prodBody').value;
     const text = 'Тема: ' + subj + '\n\n' + body;
     navigator.clipboard.writeText(text).then(
-        () => { const btn = event.target; const t = btn.textContent; btn.textContent = '✓ Скопировано'; setTimeout(() => btn.textContent = t, 1500); },
+        () => { const btn = event.target; const t = btn.textContent; btn.textContent = 'Скопировано'; setTimeout(() => btn.textContent = t, 1500); },
         () => alert('Не удалось скопировать — выделите текст вручную')
     );
 };
@@ -1007,13 +1011,34 @@ function renderSuppliers() {
             <td class="font-mono" data-label="Заказов">${s.orderCount}</td>
             <td class="font-mono text-right" data-label="Сумма закупок">${fmtCur(s.totalPurchases)}</td>
             <td class="font-mono text-right ${s.debt > 0 ? 'text-red' : ''}" data-label="Задолженность">${s.debt > 0 ? fmtCur(s.debt) : '—'}</td>
-            <td data-label=""><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openSupplierDetail(${s.id})">Карточка</button></td>
+            <td data-label="" class="row-actions">
+                <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openSupplierDetail(${s.id})">Карточка</button>
+                <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteSupplier(${s.id})">Удалить</button>
+            </td>
         </tr>`).join('');
 
     document.querySelectorAll('#suppliersBody tr[data-supplier]').forEach(tr => {
         tr.addEventListener('click', () => openSupplierDetail(+tr.dataset.supplier));
     });
 }
+
+// Удаление поставщика (для чистки списка от неактуальных).
+// Удаляет только из памяти; при следующей синхронизации из Google Таблицы
+// вернётся, если поставщик ещё фигурирует в заказах.
+window.deleteSupplier = function(supplierId) {
+    const s = suppliers.find(x => x.id === supplierId);
+    if (!s) return;
+    const sOrders = orders.filter(o => o.items.some(i => i.supplier_id === s.id));
+    let msg = `Удалить поставщика «${s.name}»?`;
+    if (sOrders.length) {
+        msg += `\n\nВнимание: с этим поставщиком связано ${sOrders.length} заказ(ов). ` +
+               `Заказы останутся, но поставщик в них перестанет отображаться.`;
+    }
+    if (!confirm(msg)) return;
+    const idx = suppliers.findIndex(x => x.id === supplierId);
+    if (idx !== -1) suppliers.splice(idx, 1);
+    renderSuppliers();
+};
 
 window.openSupplierDetail = function(supplierId) {
     const s = suppliers.find(x => x.id === supplierId);
@@ -1393,8 +1418,7 @@ searchInput.addEventListener('input', () => {
         matchedOrders.forEach(o => {
             const product = o.items.map(i => i.product_name).filter(Boolean).join(', ');
             html += `<div class="search-item" data-action="order" data-id="${o.id}">
-                <span class="search-item-icon">📋</span>
-                <span class="search-item-main">${o.order_number} — ${clientName(o.client_id)}<br><span class="text-muted" style="font-size:12px">${product.slice(0, 50)}</span></span>
+                                <span class="search-item-main">${o.order_number} — ${clientName(o.client_id)}<br><span class="text-muted" style="font-size:12px">${product.slice(0, 50)}</span></span>
                 <span class="search-item-sub"><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></span>
             </div>`;
         });
@@ -1408,8 +1432,7 @@ searchInput.addEventListener('input', () => {
         html += '<div class="search-group-title">Клиенты</div>';
         matchedClients.forEach(c => {
             html += `<div class="search-item" data-action="client" data-id="${c.id}">
-                <span class="search-item-icon">👤</span>
-                <span class="search-item-main">${c.name}</span>
+                                <span class="search-item-main">${c.name}</span>
                 <span class="search-item-sub">${c.phone}</span>
             </div>`;
         });
@@ -1422,8 +1445,7 @@ searchInput.addEventListener('input', () => {
         html += '<div class="search-group-title">Товары</div>';
         matchedProducts.forEach(p => {
             html += `<div class="search-item" data-action="product" data-id="${p.id}">
-                <span class="search-item-icon">📦</span>
-                <span class="search-item-main">${p.name}</span>
+                                <span class="search-item-main">${p.name}</span>
                 <span class="search-item-sub">${p.sku}</span>
             </div>`;
         });
@@ -1436,8 +1458,7 @@ searchInput.addEventListener('input', () => {
         html += '<div class="search-group-title">Поставщики</div>';
         matchedSuppliers.forEach(s => {
             html += `<div class="search-item" data-action="supplier" data-id="${s.id}">
-                <span class="search-item-icon">🏭</span>
-                <span class="search-item-main">${s.name}</span>
+                                <span class="search-item-main">${s.name}</span>
                 <span class="search-item-sub">${s.phone}</span>
             </div>`;
         });

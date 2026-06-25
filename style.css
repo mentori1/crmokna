@@ -160,7 +160,7 @@ body {
     font-size: 15px; pointer-events: none;
 }
 .search-box input {
-    width: 100%; padding: 9px 14px 9px 38px;
+    width: 100%; padding: 9px 14px;
     border: 1px solid var(--slate-200); border-radius: 8px;
     font-size: 14px; background: var(--slate-50);
     transition: border-color .15s, box-shadow .15s;
@@ -234,6 +234,9 @@ body {
 .btn-success:hover { background: var(--green-700); }
 .btn-danger  { background: var(--red-500); color: #fff; }
 .btn-danger:hover { background: var(--red-600); }
+
+/* Две кнопки в ячейке действий (Карточка + Удалить) */
+.row-actions { display: flex; gap: 6px; white-space: nowrap; }
 
 .link {
     color: var(--blue-600); text-decoration: none;
@@ -676,6 +679,8 @@ body {
     .data-table tbody td[data-label=""]::before { display: none; }
     .data-table tbody td[data-label=""] .btn { width: 100%; }
     .data-table tbody td[data-label=""] .delivery-select { width: 100%; }
+    /* Несколько кнопок действий на мобиле — в столбик во всю ширину */
+    .data-table tbody td.row-actions { flex-direction: column; gap: 8px; align-items: stretch; }
     /* Пустые ячейки (например пустой приход/расход) — скрываем */
     .data-table tbody td:empty { display: none; }
     /* Клиент с телефоном — выравниваем по правому краю красиво */

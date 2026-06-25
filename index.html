@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRM Овсянников</title>
+    <title>Центр окон и дверей — CRM</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=15">
+    <link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
 
@@ -14,8 +14,7 @@
 <div id="loginScreen" class="login-screen" style="display:none">
     <div class="login-card">
         <div class="login-logo">
-            <span style="font-size:42px">🏗</span>
-            <h1>CRM Овсянников</h1>
+            <h1>Центр окон и дверей</h1>
             <p class="login-sub">Демо-версия. Введите логин и пароль для входа.</p>
         </div>
         <form id="loginForm" class="login-form">
@@ -36,36 +35,28 @@
 <!-- ─── Sidebar ────────────────────────────────────────── -->
 <aside class="sidebar" id="sidebar">
     <div class="sidebar-logo">
-        <span class="logo-icon">🪟</span>
-        <span class="logo-text">Овсянников</span>
+        <span class="logo-text">Центр окон<br>и дверей</span>
     </div>
     <nav class="sidebar-nav">
         <a href="#" class="nav-item active" data-section="dashboard">
-            <span class="nav-icon">📊</span>
             <span class="nav-label">Дашборд</span>
         </a>
         <a href="#" class="nav-item" data-section="orders">
-            <span class="nav-icon">📋</span>
             <span class="nav-label">Заказы</span>
         </a>
         <a href="#" class="nav-item" data-section="delivery">
-            <span class="nav-icon">🚚</span>
             <span class="nav-label">Доставка</span>
         </a>
         <a href="#" class="nav-item" data-section="clients">
-            <span class="nav-icon">👥</span>
             <span class="nav-label">Клиенты</span>
         </a>
         <a href="#" class="nav-item" data-section="suppliers">
-            <span class="nav-icon">🏭</span>
             <span class="nav-label">Поставщики</span>
         </a>
         <a href="#" class="nav-item" data-section="finances">
-            <span class="nav-icon">💰</span>
             <span class="nav-label">Финансы</span>
         </a>
         <a href="#" class="nav-item" data-section="warehouse">
-            <span class="nav-icon">📦</span>
             <span class="nav-label">Склад</span>
         </a>
     </nav>
@@ -89,7 +80,6 @@
     <header class="topbar">
         <button class="sidebar-toggle" id="sidebarToggle">☰</button>
         <div class="search-box">
-            <span class="search-icon">🔍</span>
             <input type="text" id="globalSearch" placeholder="Поиск по заказам, клиентам, телефону, товару…" autocomplete="off">
             <div class="search-dropdown" id="searchDropdown"></div>
         </div>
@@ -174,13 +164,16 @@
                 <table class="data-table" id="ordersTable">
                     <thead>
                         <tr>
-                            <th>№ заказа</th>
                             <th>Дата</th>
+                            <th>№ заказа</th>
+                            <th>Поставщик</th>
+                            <th>Закупка</th>
+                            <th>Продажа</th>
+                            <th>Получено</th>
+                            <th>Осталось</th>
+                            <th>Доставлено</th>
                             <th>Клиент</th>
-                            <th>Сумма продажи</th>
-                            <th>Оплачено</th>
-                            <th>Маржа</th>
-                            <th>Статус</th>
+                            <th>Телефон</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -359,6 +352,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-<script src="app.js?v=15"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>
