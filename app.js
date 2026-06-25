@@ -1379,17 +1379,22 @@ searchInput.addEventListener('input', () => {
 
     let html = '';
 
+    const qDigits = q.replace(/\D/g, '');
     const matchedOrders = orders.filter(o =>
         o.order_number.toLowerCase().includes(q) ||
+        crmId(o).toLowerCase().includes(q) ||
         clientName(o.client_id).toLowerCase().includes(q) ||
-        clientPhone(o.client_id).replace(/\D/g, '').includes(q.replace(/\D/g, ''))
-    ).slice(0, 5);
+        (qDigits && clientPhone(o.client_id).replace(/\D/g, '').includes(qDigits)) ||
+        o.items.some(i => (i.product_name || '').toLowerCase().includes(q)) ||
+        (o.production_number && String(o.production_number).toLowerCase().includes(q))
+    ).slice(0, 8);
     if (matchedOrders.length) {
         html += '<div class="search-group-title">Заказы</div>';
         matchedOrders.forEach(o => {
+            const product = o.items.map(i => i.product_name).filter(Boolean).join(', ');
             html += `<div class="search-item" data-action="order" data-id="${o.id}">
                 <span class="search-item-icon">📋</span>
-                <span class="search-item-main">${o.order_number} — ${clientName(o.client_id)}</span>
+                <span class="search-item-main">${o.order_number} — ${clientName(o.client_id)}<br><span class="text-muted" style="font-size:12px">${product.slice(0, 50)}</span></span>
                 <span class="search-item-sub"><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></span>
             </div>`;
         });
