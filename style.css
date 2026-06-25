@@ -67,7 +67,9 @@ body {
 
 .sidebar {
     width: var(--sidebar-w);
-    background: var(--slate-900);
+    background:
+        radial-gradient(120% 60% at 0% 0%, rgba(37,99,235,.18) 0%, transparent 55%),
+        linear-gradient(180deg, #0e1626 0%, #0f1b30 55%, #0b1322 100%);
     color: #fff;
     display: flex;
     flex-direction: column;
@@ -75,47 +77,103 @@ body {
     top: 0; left: 0; bottom: 0;
     z-index: 100;
     transition: transform .25s;
+    border-right: 1px solid rgba(255,255,255,.06);
 }
 
+/* Лого — стеклянная плашка со знаком окна */
 .sidebar-logo {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 20px 20px 28px;
+    gap: 12px;
+    margin: 16px 14px 22px;
+    padding: 14px 14px;
+    border-radius: 14px;
+    background: rgba(255,255,255,.045);
+    border: 1px solid rgba(255,255,255,.09);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
 }
-.logo-icon { font-size: 24px; }
-.logo-text { font-size: 18px; font-weight: 700; letter-spacing: -.3px; }
+.logo-mark {
+    flex-shrink: 0;
+    width: 38px; height: 38px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--blue-500), var(--blue-700));
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(37,99,235,.4);
+}
+.logo-mark svg { width: 21px; height: 21px; }
+.logo-text {
+    font-size: 15px; font-weight: 700; line-height: 1.15;
+    letter-spacing: -.2px; color: #fff;
+}
 
 .sidebar-nav {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding: 0 8px;
+    gap: 3px;
+    padding: 0 10px;
 }
 
 .nav-item {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 10px 14px;
-    border-radius: 6px;
-    color: var(--slate-400);
+    padding: 11px 13px;
+    border-radius: 10px;
+    color: rgba(203,213,225,.75);
     text-decoration: none;
     font-size: 14px;
     font-weight: 500;
-    transition: all .15s;
+    position: relative;
+    border: 1px solid transparent;
+    transition: all .18s ease;
 }
-.nav-item:hover { color: #fff; background: rgba(255,255,255,.07); }
-.nav-item.active { color: #fff; background: var(--blue-600); }
-.nav-icon { font-size: 18px; width: 22px; text-align: center; }
+.nav-item:hover {
+    color: #fff;
+    background: rgba(255,255,255,.055);
+}
+.nav-item.active {
+    color: #fff;
+    background: linear-gradient(135deg, rgba(59,130,246,.22), rgba(59,130,246,.10));
+    border-color: rgba(99,160,255,.28);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 6px 16px rgba(37,99,235,.22);
+}
+/* Акцентная полоса слева у активного пункта */
+.nav-item.active::before {
+    content: '';
+    position: absolute; left: -10px; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 22px; border-radius: 0 3px 3px 0;
+    background: linear-gradient(180deg, #60a5fa, #2563eb);
+}
+.nav-ic {
+    flex-shrink: 0;
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    opacity: .9;
+}
+.nav-ic svg { width: 20px; height: 20px; }
+.nav-item.active .nav-ic { opacity: 1; color: #93c5fd; }
 
-.sidebar-footer { padding: 16px; border-top: 1px solid rgba(255,255,255,.08); }
-.user-badge { display: flex; align-items: center; gap: 10px; }
+.sidebar-footer { padding: 12px 14px 16px; }
+.user-badge {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 12px;
+    background: rgba(255,255,255,.045);
+    border: 1px solid rgba(255,255,255,.08);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
 .user-avatar {
-    width: 36px; height: 36px; border-radius: 50%;
-    background: var(--blue-600); display: flex; align-items: center;
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--blue-500), var(--blue-700));
+    display: flex; align-items: center;
     justify-content: center; font-size: 13px; font-weight: 600;
+    box-shadow: 0 3px 10px rgba(37,99,235,.35);
 }
 .user-name { font-size: 13px; font-weight: 600; }
 .user-role { font-size: 12px; color: var(--slate-400); }
