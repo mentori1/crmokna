@@ -1754,6 +1754,22 @@ function archiveOldOrders() {
     console.log(`Архив (до ${ARCHIVE_BEFORE}): закрыто ${closed}, оплачено-полностью ${settled}`);
 }
 
+// Удаление «мусорных» клиентов — без телефона И без осмысленного имени
+// (служебные записи: «в офис», «продажа», «склад», «-», «Без имени» и т.п.).
+// Клиенты с телефоном ИЛИ нормальным именем сохраняются.
+const JUNK_CLIENT_NAMES = ['', 'без имени', 'в офис', 'офис', 'продажа',
+                           'продажа офис', 'склад', '-', '—'];
+function removeJunkClients() {
+    const before = clients.length;
+    clients = clients.filter(c => {
+        if ((c.phone || '').trim()) return true;            // есть телефон — оставляем
+        const n = (c.name || '').trim().toLowerCase();
+        const junk = JUNK_CLIENT_NAMES.includes(n) || n.length < 3;
+        return !junk;                                       // нет имени и нет телефона — удаляем
+    });
+    console.log(`Удалено мусорных клиентов: ${before - clients.length}`);
+}
+
 async function loadData() {
     // Сначала спрашиваем логин/пароль (если есть #loginScreen)
     await ensureAuthenticated();
@@ -1769,6 +1785,7 @@ async function loadData() {
         orders = o;
         transactions = t;
         archiveOldOrders();
+        removeJunkClients();
         console.log(`Загружено: ${orders.length} заказов, ${clients.length} клиентов, ${suppliers.length} поставщиков, ${transactions.length} транзакций`);
         const initial = location.hash.replace('#', '') || 'dashboard';
         navigate(initial);
