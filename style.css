@@ -335,6 +335,40 @@ body {
 }
 .period-btn.active { background: #fff; color: var(--slate-900); box-shadow: var(--shadow); }
 
+/* ─── Лента месяцев (раздел «Заказы») ─────────────────── */
+
+.month-tabs {
+    display: flex; gap: 6px;
+    margin-bottom: 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+    scrollbar-width: thin;
+}
+.month-tab {
+    flex: 0 0 auto;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 13px;
+    border: 1px solid var(--slate-200);
+    border-radius: 999px;
+    background: #fff;
+    font-size: 13px; font-weight: 500;
+    color: var(--slate-600);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all .15s;
+}
+.month-tab:hover { border-color: var(--blue-300, #93c5fd); color: var(--slate-900); }
+.month-tab.active {
+    background: var(--blue-600); border-color: var(--blue-600); color: #fff;
+}
+.month-count {
+    font-size: 11px; font-weight: 600;
+    padding: 1px 7px; border-radius: 999px;
+    background: var(--slate-100); color: var(--slate-500);
+}
+.month-tab.active .month-count { background: rgba(255,255,255,.25); color: #fff; }
+
 /* ─── Metrics cards ───────────────────────────────────── */
 
 .metrics-grid {

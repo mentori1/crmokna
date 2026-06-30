@@ -94,6 +94,13 @@ function calcOrder(o) {
         totalSale += i.sale_price * i.quantity;
     });
     const margin = totalSale - totalPurchase;
+    // Закрытые архивные заказы (settled) считаются полностью оплаченными —
+    // и клиентом, и поставщику (без задолженностей).
+    if (o.settled) {
+        return { totalPurchase, totalSale, margin,
+                 paidByClient: totalSale, paidToSupplier: totalPurchase,
+                 clientDebt: 0, supplierDebt: 0 };
+    }
     const txs = transactions.filter(t => t.order_id === o.id);
     const paidByClient = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
     const paidToSupplier = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
@@ -398,12 +405,44 @@ function renderCharts() {
 window.ordersPage = 1;
 const ORDERS_PER_PAGE = 50;
 
+const MONTH_NAMES_FULL = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+window.ordersMonth = window.ordersMonth || 'all';  // 'all' или 'YYYY-MM'
+
+// Лента месяцев над таблицей заказов
+function renderMonthTabs() {
+    const box = document.getElementById('orderMonths');
+    if (!box) return;
+    const months = [...new Set(orders.map(o => (o.created_at || '').slice(0, 7)).filter(Boolean))]
+        .sort().reverse();  // новые слева
+    const tab = (val, label, count) =>
+        `<button class="month-tab ${window.ordersMonth === val ? 'active' : ''}" data-month="${val}">
+            ${label}${count != null ? ` <span class="month-count">${count}</span>` : ''}
+        </button>`;
+    let html = tab('all', 'Все', orders.length);
+    months.forEach(m => {
+        const [y, mo] = m.split('-');
+        const cnt = orders.filter(o => (o.created_at || '').startsWith(m)).length;
+        html += tab(m, `${MONTH_NAMES_FULL[+mo - 1]} ${y.slice(2)}`, cnt);
+    });
+    box.innerHTML = html;
+    box.querySelectorAll('.month-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            window.ordersMonth = btn.dataset.month;
+            window.ordersPage = 1;
+            renderOrders();
+        });
+    });
+}
+
 function renderOrders() {
+    renderMonthTabs();
     const status = document.getElementById('filterStatus').value;
     const dateFrom = document.getElementById('filterDateFrom').value;
     const dateTo = document.getElementById('filterDateTo').value;
+    const month = window.ordersMonth;
 
     let filtered = orders;
+    if (month && month !== 'all') filtered = filtered.filter(o => (o.created_at || '').startsWith(month));
     if (status) filtered = filtered.filter(o => o.status === status);
     if (dateFrom) filtered = filtered.filter(o => o.created_at >= dateFrom);
     if (dateTo) filtered = filtered.filter(o => o.created_at <= dateTo);
@@ -836,7 +875,6 @@ window.addPayment = function(orderId) {
 
 function buildProductionEmail(o) {
     const id = crmId(o);
-    const client = clients.find(c => c.id === o.client_id) || {};
     const firstProduct = o.items[0]?.product_name || 'Заказ';
     const subject = `Заявка ${id} — ${firstProduct}`;
 
@@ -852,7 +890,6 @@ function buildProductionEmail(o) {
 
 Идентификатор заказа: ${id}
 Дата: ${fmtDate(o.created_at)}
-Клиент: ${client.name || '—'}
 
 Состав заказа:
 ${lines}
@@ -1702,6 +1739,21 @@ document.addEventListener('keydown', e => {
 
 // ─── Init ────────────────────────────────────────────────────
 
+// Граница архива: заказы, созданные ДО этой даты, считаются завершёнными
+// (закрыты, все долги обнулены). Меняется одной строкой.
+const ARCHIVE_BEFORE = '2026-04-01';
+
+function archiveOldOrders() {
+    let closed = 0, settled = 0;
+    orders.forEach(o => {
+        if (o.created_at && o.created_at < ARCHIVE_BEFORE) {
+            if (o.status !== 'closed') { o.status = 'closed'; closed++; }
+            if (!o.settled) { o.settled = true; settled++; }
+        }
+    });
+    console.log(`Архив (до ${ARCHIVE_BEFORE}): закрыто ${closed}, оплачено-полностью ${settled}`);
+}
+
 async function loadData() {
     // Сначала спрашиваем логин/пароль (если есть #loginScreen)
     await ensureAuthenticated();
@@ -1716,6 +1768,7 @@ async function loadData() {
         suppliers = s;
         orders = o;
         transactions = t;
+        archiveOldOrders();
         console.log(`Загружено: ${orders.length} заказов, ${clients.length} клиентов, ${suppliers.length} поставщиков, ${transactions.length} транзакций`);
         const initial = location.hash.replace('#', '') || 'dashboard';
         navigate(initial);
