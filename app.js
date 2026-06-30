@@ -2,56 +2,98 @@
    CRM «Центр окон и дверей» — Application
    ============================================================ */
 
-// ─── Авторизация (для публичной демо-версии) ─────────────────
-// Включается, только если в HTML присутствует #loginScreen.
-// Хеш пары "логин:пароль" SHA-256 захардкожен ниже.
-// Сменить можно так:
-//   python3 -c "import hashlib; print(hashlib.sha256(b'НОВЫЙЛОГИН:НОВЫЙПАРОЛЬ').hexdigest())"
-// и заменить значение AUTH_HASH.
-const AUTH_HASH = 'eee74eb34dca056035c0c1552580a54bc90ac99eaa8f558a43df866e4544218b';
-const AUTH_STORAGE_KEY = 'ovsyannikov_crm_auth_v1';
-
-async function sha256(str) {
-    const buf = new TextEncoder().encode(str);
-    const hashBuf = await crypto.subtle.digest('SHA-256', buf);
-    return Array.from(new Uint8Array(hashBuf))
-        .map(b => b.toString(16).padStart(2, '0')).join('');
-}
+// ─── Supabase: клиент + авторизация ──────────────────────────
+// Данные хранятся в Supabase и защищены RLS — без входа не видны.
+const SB = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
 async function ensureAuthenticated() {
     const loginEl = document.getElementById('loginScreen');
-    if (!loginEl) return true;  // нет логин-экрана — авторизация не нужна
-    // На localhost логин не нужен (твоя домашняя версия)
-    const host = location.hostname;
-    if (host === 'localhost' || host === '127.0.0.1' || host === '') {
-        loginEl.remove();
-        return true;
-    }
-    // Уже залогинен?
-    if (sessionStorage.getItem(AUTH_STORAGE_KEY) === AUTH_HASH) {
-        loginEl.style.display = 'none';
-        return true;
-    }
+    const { data: { session } } = await SB.auth.getSession();
+    if (session) { if (loginEl) loginEl.style.display = 'none'; return true; }
+    if (!loginEl) return false;
 
     loginEl.style.display = 'flex';
     return new Promise(resolve => {
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const u = document.getElementById('loginUser').value.trim();
-            const p = document.getElementById('loginPass').value;
-            const h = await sha256(u + ':' + p);
+            const email = document.getElementById('loginUser').value.trim();
+            const password = document.getElementById('loginPass').value;
             const errEl = document.getElementById('loginError');
-            if (h === AUTH_HASH) {
-                sessionStorage.setItem(AUTH_STORAGE_KEY, AUTH_HASH);
-                loginEl.style.display = 'none';
-                resolve(true);
-            } else {
-                errEl.textContent = 'Неверный логин или пароль';
+            errEl.classList.remove('show');
+            const btn = e.target.querySelector('button[type=submit]');
+            btn.disabled = true; btn.textContent = 'Вход…';
+            const { error } = await SB.auth.signInWithPassword({ email, password });
+            btn.disabled = false; btn.textContent = 'Войти';
+            if (error) {
+                errEl.textContent = 'Неверный email или пароль';
                 errEl.classList.add('show');
                 document.getElementById('loginPass').value = '';
+            } else {
+                loginEl.style.display = 'none';
+                resolve(true);
             }
         });
     });
+}
+
+// Выход
+window.logout = async function() {
+    await SB.auth.signOut();
+    location.reload();
+};
+
+// ─── Запись в Supabase (persistence) ─────────────────────────
+// Модель: optimistic UI — локальные массивы обновляются сразу (мгновенный
+// отклик), а в фоне пишем в БД. Ошибку показываем тостом, но UI не блокируем.
+function dbToast(msg, ok) {
+    let el = document.getElementById('dbToast');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'dbToast';
+        el.className = 'db-toast';
+        document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.className = 'db-toast show ' + (ok ? 'ok' : 'err');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('show'), ok ? 1500 : 5000);
+}
+function dbErr(where, error) {
+    if (error) { console.error(where, error); dbToast('Не сохранено: ' + where, false); }
+}
+
+async function sbInsertOrder(o) {
+    const { items, ...row } = o;
+    const { error } = await SB.from('orders').insert(row);
+    if (error) return dbErr('заказ', error);
+    if (items && items.length) {
+        const { error: e2 } = await SB.from('order_items')
+            .insert(items.map(i => ({ ...i, order_id: o.id })));
+        dbErr('позиции заказа', e2);
+    }
+    dbToast('Заказ сохранён', true);
+}
+async function sbUpdateOrder(id, patch) {
+    const { error } = await SB.from('orders').update(patch).eq('id', id);
+    dbErr('обновление заказа', error);
+}
+async function sbReplaceItems(orderId, items) {
+    await SB.from('order_items').delete().eq('order_id', orderId);
+    if (items && items.length) {
+        const { error } = await SB.from('order_items')
+            .insert(items.map(i => ({ ...i, order_id: orderId })));
+        dbErr('позиции заказа', error);
+    }
+}
+async function sbInsertTransaction(t) {
+    const { error } = await SB.from('transactions').insert(t);
+    if (error) dbErr('платёж', error); else dbToast('Платёж сохранён', true);
+}
+async function sbInsertClient(c) { dbErr('клиент', (await SB.from('clients').insert(c)).error); }
+async function sbInsertSupplier(s) { dbErr('поставщик', (await SB.from('suppliers').insert(s)).error); }
+async function sbDeleteSupplier(id) {
+    const { error } = await SB.from('suppliers').delete().eq('id', id);
+    if (error) dbErr('удаление поставщика', error); else dbToast('Поставщик удалён', true);
 }
 
 
@@ -572,7 +614,7 @@ function renderDelivery() {
         sel.addEventListener('change', (e) => {
             e.stopPropagation();
             const o = orders.find(x => x.id === +sel.dataset.order);
-            if (o) o.delivery_status = sel.value === 'none' ? null : sel.value;
+            if (o) { o.delivery_status = sel.value === 'none' ? null : sel.value; sbUpdateOrder(o.id, { delivery_status: o.delivery_status }); }
             renderDelivery();
         });
     });
@@ -815,11 +857,18 @@ window.saveOrderEdit = function(orderId) {
     o.client_id = findOrCreateClient(name, phone);
     // обновим телефон клиента, если изменили
     const cl = clients.find(c => c.id === o.client_id);
-    if (cl && phone) cl.phone = phone;
+    if (cl && phone) { cl.phone = phone; sbUpdateClient(cl.id, { phone }); }
     o.items = items;
     o.created_at = document.getElementById('editCreatedDate').value || o.created_at;
     o.delivery_date = document.getElementById('editDeliveryDate').value || null;
     o.notes = document.getElementById('editNotes').value.trim();
+
+    // Сохраняем изменения заказа и его позиции в Supabase
+    sbUpdateOrder(o.id, {
+        client_id: o.client_id, created_at: o.created_at,
+        delivery_date: o.delivery_date, notes: o.notes,
+    });
+    sbReplaceItems(o.id, items);
 
     openOrderDetail(o.id);
     // обновим таблицу под модалкой
@@ -831,7 +880,7 @@ window.changeOrderStatus = function(orderId) {
     const o = orders.find(x => x.id === orderId);
     if (!o) return;
     const sel = document.getElementById('modalStatusSelect');
-    if (sel) { o.status = sel.value; }
+    if (sel) { o.status = sel.value; sbUpdateOrder(o.id, { status: o.status }); }
     closeModal();
     renderSection(document.querySelector('.nav-item.active').dataset.section);
 };
@@ -854,7 +903,7 @@ window.addPayment = function(orderId) {
     const supplierId = o.items.find(i => i.supplier_id)?.supplier_id;
 
     const newId = transactions.length ? Math.max(...transactions.map(t => t.id)) + 1 : 1;
-    transactions.push({
+    const tx = {
         id: newId,
         date: new Date().toISOString().slice(0, 10),
         type: type,
@@ -863,7 +912,9 @@ window.addPayment = function(orderId) {
         order_id: o.id,
         amount: amount,
         description: desc,
-    });
+    };
+    transactions.push(tx);
+    sbInsertTransaction(tx);        // сохраняем платёж в Supabase
     // Перерисовываем карточку (текущая модалка) И активную секцию под ней (Дашборд / Заказы / Финансы / Клиенты / Поставщики)
     openOrderDetail(o.id);
     rerenderActiveSection();
@@ -1074,6 +1125,7 @@ window.deleteSupplier = function(supplierId) {
     if (!confirm(msg)) return;
     const idx = suppliers.findIndex(x => x.id === supplierId);
     if (idx !== -1) suppliers.splice(idx, 1);
+    sbDeleteSupplier(supplierId);   // удаляем из Supabase
     renderSuppliers();
 };
 
@@ -1246,7 +1298,7 @@ window.saveNewTransaction = function() {
     const type = document.getElementById('txFormType').value;
     const [entityType, entityId] = document.getElementById('txFormEntity').value.split(':');
     const newId = transactions.length ? Math.max(...transactions.map(t => t.id)) + 1 : 1;
-    transactions.push({
+    const tx = {
         id: newId,
         date: document.getElementById('txFormDate').value || new Date().toISOString().slice(0, 10),
         type: type,
@@ -1255,7 +1307,9 @@ window.saveNewTransaction = function() {
         order_id: null,
         amount: amount,
         description: document.getElementById('txFormDesc').value.trim() || '',
-    });
+    };
+    transactions.push(tx);
+    sbInsertTransaction(tx);        // сохраняем операцию в Supabase
     closeModal();
     rerenderActiveSection();
 };
@@ -1650,13 +1704,19 @@ function findOrCreateClient(name, phone) {
     const norm = name.trim().toLowerCase();
     let cl = clients.find(c => c.name.trim().toLowerCase() === norm);
     if (cl) {
-        if (phone && !cl.phone) cl.phone = phone;  // дополним телефон, если не был указан
+        if (phone && !cl.phone) { cl.phone = phone; sbUpdateClient(cl.id, { phone }); }
         return cl.id;
     }
     const newId = clients.length ? Math.max(...clients.map(c => c.id)) + 1 : 1;
-    clients.push({ id: newId, name: name.trim(), phone: phone || '', email: '', address: '',
-                   created_at: new Date().toISOString().slice(0, 10) });
+    const row = { id: newId, name: name.trim(), phone: phone || '', email: '', address: '',
+                  created_at: new Date().toISOString().slice(0, 10) };
+    clients.push(row);
+    sbInsertClient(row);            // сохраняем нового клиента в Supabase
     return newId;
+}
+
+async function sbUpdateClient(id, patch) {
+    dbErr('клиент', (await SB.from('clients').update(patch).eq('id', id)).error);
 }
 
 // Найти поставщика по названию или создать нового
@@ -1666,7 +1726,9 @@ function findOrCreateSupplier(name) {
     let s = suppliers.find(x => x.name.trim().toLowerCase() === norm);
     if (s) return s.id;
     const newId = suppliers.length ? Math.max(...suppliers.map(x => x.id)) + 1 : 1;
-    suppliers.push({ id: newId, name: name.trim(), contact_person: '', phone: '', email: '' });
+    const row = { id: newId, name: name.trim(), contact_person: '', phone: '', email: '' };
+    suppliers.push(row);
+    sbInsertSupplier(row);          // сохраняем нового поставщика в Supabase
     return newId;
 }
 
@@ -1696,7 +1758,7 @@ window.saveNewOrder = function() {
     const newId = orders.length ? Math.max(...orders.map(o => o.id)) + 1 : 1;
     const deliveryDate = document.getElementById('formDeliveryDate').value || null;
 
-    orders.push({
+    const newOrder = {
         id: newId,
         order_number: 'ЗК-' + String(newId).padStart(3, '0'),
         client_id: clientId,
@@ -1706,7 +1768,9 @@ window.saveNewOrder = function() {
         delivery_date: deliveryDate,
         notes: document.getElementById('formNotes').value.trim(),
         items: items,
-    });
+    };
+    orders.push(newOrder);
+    sbInsertOrder(newOrder);        // сохраняем заказ в Supabase
 
     closeModal();
     navigate('orders');
@@ -1770,23 +1834,43 @@ function removeJunkClients() {
     console.log(`Удалено мусорных клиентов: ${before - clients.length}`);
 }
 
+// Загрузка всех строк таблицы с пагинацией (PostgREST отдаёт max 1000 за раз)
+async function fetchAll(table, select = '*') {
+    let all = [], from = 0; const size = 1000;
+    while (true) {
+        const { data, error } = await SB.from(table).select(select).range(from, from + size - 1);
+        if (error) throw error;
+        all = all.concat(data);
+        if (data.length < size) break;
+        from += size;
+    }
+    return all;
+}
+
 async function loadData() {
-    // Сначала спрашиваем логин/пароль (если есть #loginScreen)
     await ensureAuthenticated();
     try {
-        const [c, s, o, t] = await Promise.all([
-            fetch('data/clients.json').then(r => r.json()),
-            fetch('data/suppliers.json').then(r => r.json()),
-            fetch('data/orders.json').then(r => r.json()),
-            fetch('data/transactions.json').then(r => r.json()),
+        const [c, s, ordRaw, t] = await Promise.all([
+            fetchAll('clients'),
+            fetchAll('suppliers'),
+            fetchAll('orders', '*, order_items(*)'),
+            fetchAll('transactions'),
         ]);
         clients = c;
         suppliers = s;
-        orders = o;
-        transactions = t;
+        transactions = t.map(x => ({ ...x, amount: +x.amount }));
+        // Разворачиваем вложенные order_items в o.items (с приведением чисел)
+        orders = ordRaw.map(o => {
+            const items = (o.order_items || []).map(i => ({
+                product_name: i.product_name, dimensions: i.dimensions || '',
+                supplier_id: i.supplier_id, quantity: +i.quantity,
+                purchase_price: +i.purchase_price, sale_price: +i.sale_price,
+            }));
+            const { order_items, ...rest } = o;
+            return { ...rest, items };
+        });
         archiveOldOrders();
-        removeJunkClients();
-        console.log(`Загружено: ${orders.length} заказов, ${clients.length} клиентов, ${suppliers.length} поставщиков, ${transactions.length} транзакций`);
+        console.log(`Загружено из Supabase: ${orders.length} заказов, ${clients.length} клиентов, ${suppliers.length} поставщиков, ${transactions.length} транзакций`);
         const initial = location.hash.replace('#', '') || 'dashboard';
         navigate(initial);
     } catch (err) {
@@ -1794,8 +1878,8 @@ async function loadData() {
         document.querySelector('.content').innerHTML = `
             <div style="padding:40px;text-align:center">
                 <h2>Не удалось загрузить данные</h2>
-                <p style="color:#dc2626">${err.message}</p>
-                <p style="color:#64748b">Запустите парсер: <code>python3 import/parse_csv.py</code></p>
+                <p style="color:#dc2626">${err.message || err}</p>
+                <p style="color:#64748b">Проверьте подключение к интернету и повторите вход.</p>
             </div>`;
     }
 }

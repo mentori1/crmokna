@@ -1035,3 +1035,16 @@ body {
 .text-right { text-align: right; }
 .font-mono  { font-variant-numeric: tabular-nums; }
 .nowrap     { white-space: nowrap; }
+
+/* ─── Тост сохранения в БД ─────────────────────────────── */
+.db-toast {
+    position: fixed; bottom: 20px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    padding: 12px 20px; border-radius: 10px;
+    font-size: 14px; font-weight: 500; color: #fff;
+    box-shadow: 0 10px 25px rgba(0,0,0,.2); z-index: 2000;
+    opacity: 0; pointer-events: none; transition: all .25s; max-width: 90vw;
+}
+.db-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.db-toast.ok  { background: var(--green-600); }
+.db-toast.err { background: var(--red-600); }

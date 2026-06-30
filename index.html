@@ -6,7 +6,7 @@
     <title>Центр окон и дверей — CRM</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=19">
+    <link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
 
@@ -15,12 +15,12 @@
     <div class="login-card">
         <div class="login-logo">
             <h1>Центр окон и дверей</h1>
-            <p class="login-sub">Демо-версия. Введите логин и пароль для входа.</p>
+            <p class="login-sub">Введите email и пароль для входа.</p>
         </div>
         <form id="loginForm" class="login-form">
             <div class="form-group">
-                <label>Логин</label>
-                <input type="text" id="loginUser" autocomplete="username" required>
+                <label>Email</label>
+                <input type="email" id="loginUser" autocomplete="username" placeholder="you@example.com" required>
             </div>
             <div class="form-group">
                 <label>Пароль</label>
@@ -74,11 +74,11 @@
         </a>
     </nav>
     <div class="sidebar-footer">
-        <div class="user-badge">
+        <div class="user-badge" onclick="logout()" title="Выйти" style="cursor:pointer">
             <div class="user-avatar">ОВ</div>
             <div class="user-info">
                 <div class="user-name">Овсянников</div>
-                <div class="user-role">Владелец</div>
+                <div class="user-role">Выйти →</div>
             </div>
         </div>
     </div>
@@ -366,6 +366,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-<script src="app.js?v=19"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js?v=20"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>

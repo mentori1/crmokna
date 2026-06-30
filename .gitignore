@@ -18,3 +18,10 @@ __pycache__/
 # Excel-исходники (могут содержать ПДн)
 *.xlsx
 *.csv
+
+# Supabase access token
+integration/.supabase_token
+integration/.supabase_keys.json
+integration/.sr_key
+integration/.crm_login_pass
+integration/.anon_key
