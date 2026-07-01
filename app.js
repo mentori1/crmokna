@@ -1492,7 +1492,7 @@ window.openClientEditForm = function(clientId) {
             </div>
             <div class="form-group full">
                 <label>Адрес</label>
-                <input type="text" id="editCliAddress" value="${esc(cl.address)}" placeholder="ул. Ленина, 10">
+                <input type="text" id="editCliAddress" class="addr-suggest" value="${esc(cl.address)}" placeholder="Начните вводить адрес…" autocomplete="off">
             </div>
         </div>
         <div class="form-actions">
@@ -1515,6 +1515,55 @@ window.saveClientEdit = function(clientId) {
     openClientDetail(cl.id);
     const active = document.querySelector('.nav-item.active');
     if (active) renderSection(active.dataset.section);
+};
+
+// Создание нового клиента (кнопка «+ Новый клиент» в разделе «Клиенты»)
+window.openNewClientForm = function() {
+    openModal('Новый клиент', `
+        <div class="form-grid">
+            <div class="form-group full">
+                <label>Имя (ФИО)</label>
+                <input type="text" id="newCliName" placeholder="Фамилия Имя Отчество" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label>Телефон</label>
+                <input type="text" id="newCliPhone" class="phone-input" placeholder="+7 (___) ___-__-__">
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="newCliEmail" placeholder="mail@example.com">
+            </div>
+            <div class="form-group full">
+                <label>Адрес</label>
+                <input type="text" id="newCliAddress" class="addr-suggest" placeholder="Начните вводить адрес…" autocomplete="off">
+            </div>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-outline" onclick="closeModal()">Отмена</button>
+            <button class="btn btn-primary" onclick="saveNewClient()">Создать</button>
+        </div>
+    `);
+    setTimeout(() => document.getElementById('newCliName').focus(), 50);
+};
+window.saveNewClient = function() {
+    const name = document.getElementById('newCliName').value.trim();
+    const phone = document.getElementById('newCliPhone').value.trim();
+    const address = document.getElementById('newCliAddress').value.trim();
+    const email = document.getElementById('newCliEmail').value.trim();
+    if (!name && !phone && !address) { alert('Укажите хотя бы имя, телефон или адрес'); return; }
+    // если такой телефон уже есть — не плодим дубль
+    const existing = phone ? findClientByPhone(phone) : null;
+    if (existing) {
+        alert(`Клиент с этим номером уже есть: ${clientLabel(existing)}`);
+        closeModal(); openClientDetail(existing.id); return;
+    }
+    const row = { id: nextLocalId(clients), name, phone, email, address,
+                  created_at: new Date().toISOString().slice(0, 10) };
+    clients.push(row);
+    sbInsertClient(row);
+    closeModal();
+    navigate('clients');
+    openClientDetail(row.id);
 };
 
 
@@ -2210,7 +2259,7 @@ function openNewOrderForm() {
             </div>
             <div class="form-group full">
                 <label>Адрес доставки</label>
-                <input type="text" id="formDeliveryAddr" placeholder="ул. Ленина, 10">
+                <input type="text" id="formDeliveryAddr" class="addr-suggest" placeholder="Начните вводить адрес…" autocomplete="off">
             </div>
         </div>
 
@@ -2349,6 +2398,71 @@ window.saveNewOrder = function() {
 
 document.getElementById('btnNewOrder2').addEventListener('click', openNewOrderForm);
 document.getElementById('btnNewSupplier').addEventListener('click', () => openSupplierForm());
+document.getElementById('btnNewClient').addEventListener('click', openNewClientForm);
+
+// ─── Подсказки адреса (Яндекс.Карты, Geosuggest) ─────────────
+// Работает на полях с классом .addr-suggest (адрес доставки в заказе, адрес
+// клиента). Без ключа (window.YANDEX_SUGGEST_KEY) поле — обычный текст.
+let addrSuggestTimer = null;
+function addrBox() {
+    let box = document.getElementById('addrSuggestBox');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'addrSuggestBox';
+        box.className = 'addr-suggest-box';
+        document.body.appendChild(box);
+    }
+    return box;
+}
+async function fetchYandexSuggest(q) {
+    const key = window.YANDEX_SUGGEST_KEY;
+    if (!key) return [];
+    const url = `https://suggest-maps.yandex.ru/v1/suggest?apikey=${key}` +
+        `&text=${encodeURIComponent(q)}&lang=ru_RU&results=7&print_address=1` +
+        `&types=house,street,locality,district`;
+    try {
+        const r = await fetch(url);
+        if (!r.ok) return [];
+        const d = await r.json();
+        return (d.results || []).map(x => {
+            const fa = x.address && x.address.formatted_address;
+            const title = (x.title && x.title.text) || '';
+            const sub = (x.subtitle && x.subtitle.text) || '';
+            return { text: fa || [sub, title].filter(Boolean).join(', '), title, sub };
+        }).filter(x => x.text);
+    } catch (e) { return []; }
+}
+document.addEventListener('input', e => {
+    const t = e.target;
+    if (!t.classList || !t.classList.contains('addr-suggest')) return;
+    const box = addrBox();
+    clearTimeout(addrSuggestTimer);
+    const q = t.value.trim();
+    if (!window.YANDEX_SUGGEST_KEY || q.length < 3) { box.style.display = 'none'; return; }
+    addrSuggestTimer = setTimeout(async () => {
+        const items = await fetchYandexSuggest(q);
+        if (!items.length || document.activeElement !== t) { box.style.display = 'none'; return; }
+        box.innerHTML = items.map((it, i) =>
+            `<div class="addr-suggest-item" data-i="${i}">${it.text.replace(/</g, '&lt;')}</div>`).join('');
+        box._items = items;
+        const r = t.getBoundingClientRect();
+        box.style.left = r.left + 'px';
+        box.style.top = (r.bottom + 2) + 'px';
+        box.style.width = r.width + 'px';
+        box.style.display = 'block';
+        box.querySelectorAll('.addr-suggest-item').forEach(el => {
+            el.addEventListener('mousedown', ev => {   // mousedown — успеть до blur
+                ev.preventDefault();
+                t.value = box._items[+el.dataset.i].text;
+                box.style.display = 'none';
+            });
+        });
+    }, 300);
+});
+document.addEventListener('click', e => {
+    const box = document.getElementById('addrSuggestBox');
+    if (box && !e.target.closest('.addr-suggest') && !e.target.closest('#addrSuggestBox')) box.style.display = 'none';
+});
 document.getElementById('productSearch').addEventListener('input', renderProductCatalog);
 // Массовый выбор в каталоге продукции
 document.getElementById('productSelectAll').addEventListener('change', e => {

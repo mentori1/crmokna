@@ -403,6 +403,19 @@ body.modal-open { overflow: hidden; }
 .bulk-count { font-weight: 600; color: var(--slate-700); margin-right: auto; }
 .prod-check { width: 17px; height: 17px; cursor: pointer; accent-color: var(--blue-600); }
 
+/* Выпадашка подсказок адреса (Яндекс) */
+.addr-suggest-box {
+    display: none; position: fixed; z-index: 1000;
+    background: #fff; border: 1px solid var(--slate-200);
+    border-radius: 10px; box-shadow: var(--shadow-lg);
+    max-height: 260px; overflow-y: auto;
+}
+.addr-suggest-item {
+    padding: 9px 13px; font-size: 13.5px; color: var(--slate-700);
+    cursor: pointer; border-bottom: 1px solid var(--slate-50);
+}
+.addr-suggest-item:hover { background: var(--blue-50); color: var(--slate-900); }
+
 /* Пометка «нужно указать» (нет имени/телефона у клиента) */
 .need-name {
     display: inline-block; font-size: 11px; font-weight: 600;
