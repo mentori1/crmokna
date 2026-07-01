@@ -377,6 +377,8 @@ body.modal-open { overflow: hidden; }
 #financeTable th:nth-child(6), #financeTable td:nth-child(6) { width: 90px; }   /* Расход */
 /* Контрагент и Описание — переносятся по словам */
 #financeTable td:nth-child(3), #financeTable td:nth-child(7) { white-space: normal; word-break: break-word; }
+/* Больше воздуха между «Тип» и «Контрагент» — не сливаются */
+#financeTable th:nth-child(3), #financeTable td:nth-child(3) { padding-left: 22px; }
 #finMonths.product-cats { max-height: 70vh; overflow-y: auto; padding-right: 4px; }
 .fin-year-head {
     display: flex; align-items: center; justify-content: space-between;
