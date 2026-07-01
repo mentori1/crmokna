@@ -1183,13 +1183,13 @@ ymaps[class*="__suggest"], [class*="ymaps"][class*="__suggest"] { z-index: 10000
 /* Карточка — glassmorphism */
 .login-card {
     position: relative; z-index: 1;
-    width: 100%; max-width: 540px;
-    padding: 56px 56px 40px;
+    width: 100%; max-width: 400px;
+    padding: 36px 36px 26px;
     background: rgba(255,255,255,0.95);
     -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
     border: 1px solid rgba(255,255,255,0.65);
-    border-radius: 28px;
-    box-shadow: 0 30px 80px rgba(2,6,23,.45), 0 2px 10px rgba(2,6,23,.25);
+    border-radius: 22px;
+    box-shadow: 0 24px 60px rgba(2,6,23,.42), 0 2px 8px rgba(2,6,23,.22);
     animation: loginCardIn .5s cubic-bezier(.16,1,.3,1);
 }
 @keyframes loginCardIn {
@@ -1197,58 +1197,58 @@ ymaps[class*="__suggest"], [class*="ymaps"][class*="__suggest"] { z-index: 10000
     to   { opacity: 1; transform: none; }
 }
 
-.login-head { text-align: center; margin-bottom: 44px; }
+.login-head { text-align: center; margin-bottom: 26px; }
 .login-logo-mark {
-    width: 68px; height: 68px; margin: 0 auto 22px;
+    width: 52px; height: 52px; margin: 0 auto 16px;
     display: flex; align-items: center; justify-content: center;
-    border-radius: 20px; color: #fff;
+    border-radius: 15px; color: #fff;
     background: linear-gradient(135deg, #2563EB, #1D4ED8);
-    box-shadow: 0 12px 26px rgba(37,99,235,.38);
+    box-shadow: 0 10px 22px rgba(37,99,235,.35);
 }
-.login-logo-mark svg { width: 34px; height: 34px; }
+.login-logo-mark svg { width: 27px; height: 27px; }
 .login-title {
-    margin: 0 0 12px; font-size: 40px; line-height: 1.08;
+    margin: 0 0 6px; font-size: 26px; line-height: 1.12;
     font-weight: 700; letter-spacing: -.02em; color: #111827;
 }
-.login-sub { margin: 0; font-size: 18px; color: #64748B; }
+.login-sub { margin: 0; font-size: 15px; color: #64748B; }
 
-.login-form { display: flex; flex-direction: column; gap: 16px; }
+.login-form { display: flex; flex-direction: column; gap: 12px; }
 
 /* Поля ввода с иконкой */
 .login-field {
-    position: relative; display: flex; align-items: center; height: 64px;
-    background: #fff; border: 1px solid #E5E7EB; border-radius: 16px;
+    position: relative; display: flex; align-items: center; height: 50px;
+    background: #fff; border: 1px solid #E5E7EB; border-radius: 12px;
     transition: border-color .2s, box-shadow .2s;
 }
 .login-field:focus-within {
-    border-color: #2563EB; box-shadow: 0 0 0 4px rgba(37,99,235,.12);
+    border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37,99,235,.12);
 }
 .login-field-ic {
-    flex: 0 0 56px; width: 56px; color: #94A3B8;
+    flex: 0 0 44px; width: 44px; color: #94A3B8;
     display: flex; align-items: center; justify-content: center;
 }
-.login-field-ic svg { width: 22px; height: 22px; }
+.login-field-ic svg { width: 19px; height: 19px; }
 .login-field input {
     flex: 1; min-width: 0; height: 100%;
     border: none; outline: none; background: transparent;
-    font-family: inherit; font-size: 18px; color: #111827; padding: 0 6px 0 0;
+    font-family: inherit; font-size: 15px; color: #111827; padding: 0 6px 0 0;
 }
 .login-field input::placeholder { color: #9CA3AF; }
 .login-eye {
-    flex: 0 0 56px; width: 56px; color: #94A3B8;
+    flex: 0 0 44px; width: 44px; color: #94A3B8;
     background: none; border: none; cursor: pointer;
     display: flex; align-items: center; justify-content: center; transition: color .15s;
 }
 .login-eye:hover { color: #2563EB; }
-.login-eye svg { width: 22px; height: 22px; }
+.login-eye svg { width: 19px; height: 19px; }
 
 /* Кнопка */
 .login-submit {
-    margin-top: 8px; height: 64px; border: none; border-radius: 16px;
+    margin-top: 6px; height: 50px; border: none; border-radius: 12px;
     background: linear-gradient(90deg, #2563EB, #1D4ED8);
-    color: #fff; font-family: inherit; font-size: 18px; font-weight: 600; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; gap: 10px;
-    box-shadow: 0 12px 26px rgba(37,99,235,.32);
+    color: #fff; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 9px;
+    box-shadow: 0 10px 22px rgba(37,99,235,.3);
     transition: transform .2s, box-shadow .2s, filter .2s;
 }
 .login-submit:hover {
@@ -1257,42 +1257,40 @@ ymaps[class*="__suggest"], [class*="ymaps"][class*="__suggest"] { z-index: 10000
 }
 .login-submit:active { transform: translateY(0); }
 .login-submit:disabled { opacity: .7; cursor: default; transform: none; }
-.login-submit-arrow { width: 20px; height: 20px; transition: transform .2s; }
+.login-submit-arrow { width: 17px; height: 17px; transition: transform .2s; }
 .login-submit:hover .login-submit-arrow { transform: translateX(4px); }
 
 /* Ряд: запомнить / забыли пароль */
 .login-row {
     display: flex; align-items: center; justify-content: space-between;
-    margin-top: 6px; font-size: 15px;
+    margin-top: 4px; font-size: 13.5px;
 }
 .login-remember {
-    display: flex; align-items: center; gap: 9px; cursor: pointer;
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
     color: #475569; user-select: none;
 }
-.login-remember input { width: 18px; height: 18px; accent-color: #2563EB; cursor: pointer; }
+.login-remember input { width: 16px; height: 16px; accent-color: #2563EB; cursor: pointer; }
 .login-forgot { color: #2563EB; text-decoration: none; font-weight: 500; }
 .login-forgot:hover { text-decoration: underline; }
 
 .login-error {
-    margin-top: 4px; padding: 12px 14px; border-radius: 12px; font-size: 14px;
+    margin-top: 4px; padding: 10px 12px; border-radius: 10px; font-size: 13px;
     background: #FEF2F2; color: #DC2626; text-align: center; display: none;
 }
 .login-error.show { display: block; }
 
 /* Низ: защита данных */
 .login-secure {
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    margin-top: 36px; padding-top: 24px; border-top: 1px solid #EEF2F6;
-    color: #94A3B8; font-size: 14px;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    margin-top: 22px; padding-top: 16px; border-top: 1px solid #EEF2F6;
+    color: #94A3B8; font-size: 13px;
 }
-.login-secure svg { width: 16px; height: 16px; }
+.login-secure svg { width: 15px; height: 15px; }
 
 @media (max-width: 560px) {
-    .login-card { padding: 36px 24px 28px; border-radius: 22px; }
-    .login-title { font-size: 30px; }
-    .login-sub { font-size: 16px; }
-    .login-head { margin-bottom: 30px; }
-    .login-field, .login-submit { height: 58px; }
+    .login-card { padding: 30px 22px 24px; border-radius: 20px; }
+    .login-title { font-size: 23px; }
+    .login-head { margin-bottom: 22px; }
 }
 
 /* ─── Pagination ──────────────────────────────────────── */
