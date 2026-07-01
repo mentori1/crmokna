@@ -62,10 +62,33 @@ function dbErr(where, error) {
     if (error) { console.error(where, error); dbToast('Не сохранено: ' + where, false); }
 }
 
+// Универсальное обновление с ОПТИМИСТИЧНОЙ БЛОКИРОВКОЙ по version.
+// localObj — объект в памяти (содержит id и version). Если version в БД не
+// совпал (кто-то уже изменил строку) — конфликт, тихо не затираем.
+async function sbUpdate(table, localObj, patch, label) {
+    const { data, error } = await SB.from(table)
+        .update(patch).eq('id', localObj.id).eq('version', localObj.version ?? 1)
+        .select().maybeSingle();
+    if (error) { dbErr(label, error); return false; }
+    if (!data) { await handleConflict(table, localObj); return false; }
+    localObj.version = data.version;
+    localObj.updated_at = data.updated_at;
+    return true;
+}
+// Конфликт версий: подтягиваем свежие данные и перерисовываем.
+async function handleConflict(table, localObj) {
+    const { data } = await SB.from(table).select().eq('id', localObj.id).maybeSingle();
+    dbToast('Запись изменена другим пользователем — показана свежая версия', false);
+    if (data) { Object.assign(localObj, data); rerenderActiveSection && rerenderActiveSection(); }
+}
+
 async function sbInsertOrder(o) {
     const { items, ...row } = o;
     const { error } = await SB.from('orders').insert(row);
-    if (error) return dbErr('заказ', error);
+    if (error) {
+        if (error.code === '23505') { dbToast('Заказ уже создан', true); return; } // дабл-клик
+        return dbErr('заказ', error);
+    }
     if (items && items.length) {
         const { error: e2 } = await SB.from('order_items')
             .insert(items.map(i => ({ ...i, order_id: o.id })));
@@ -73,10 +96,8 @@ async function sbInsertOrder(o) {
     }
     dbToast('Заказ сохранён', true);
 }
-async function sbUpdateOrder(id, patch) {
-    const { error } = await SB.from('orders').update(patch).eq('id', id);
-    dbErr('обновление заказа', error);
-}
+function sbUpdateOrder(o, patch) { return sbUpdate('orders', o, patch, 'обновление заказа'); }
+function sbUpdateClient(c, patch) { return sbUpdate('clients', c, patch, 'клиент'); }
 async function sbReplaceItems(orderId, items) {
     await SB.from('order_items').delete().eq('order_id', orderId);
     if (items && items.length) {
@@ -91,9 +112,10 @@ async function sbInsertTransaction(t) {
 }
 async function sbInsertClient(c) { dbErr('клиент', (await SB.from('clients').insert(c)).error); }
 async function sbInsertSupplier(s) { dbErr('поставщик', (await SB.from('suppliers').insert(s)).error); }
-async function sbDeleteSupplier(id) {
-    const { error } = await SB.from('suppliers').delete().eq('id', id);
-    if (error) dbErr('удаление поставщика', error); else dbToast('Поставщик удалён', true);
+// Soft-delete: помечаем deleted_at (можно восстановить), физически не удаляем.
+async function sbDeleteSupplier(s) {
+    const ok = await sbUpdate('suppliers', s, { deleted_at: new Date().toISOString() }, 'удаление поставщика');
+    if (ok) dbToast('Поставщик удалён', true);
 }
 
 
@@ -614,7 +636,7 @@ function renderDelivery() {
         sel.addEventListener('change', (e) => {
             e.stopPropagation();
             const o = orders.find(x => x.id === +sel.dataset.order);
-            if (o) { o.delivery_status = sel.value === 'none' ? null : sel.value; sbUpdateOrder(o.id, { delivery_status: o.delivery_status }); }
+            if (o) { o.delivery_status = sel.value === 'none' ? null : sel.value; sbUpdateOrder(o, { delivery_status: o.delivery_status }); }
             renderDelivery();
         });
     });
@@ -857,14 +879,14 @@ window.saveOrderEdit = function(orderId) {
     o.client_id = findOrCreateClient(name, phone);
     // обновим телефон клиента, если изменили
     const cl = clients.find(c => c.id === o.client_id);
-    if (cl && phone) { cl.phone = phone; sbUpdateClient(cl.id, { phone }); }
+    if (cl && phone) { cl.phone = phone; sbUpdateClient(cl, { phone }); }
     o.items = items;
     o.created_at = document.getElementById('editCreatedDate').value || o.created_at;
     o.delivery_date = document.getElementById('editDeliveryDate').value || null;
     o.notes = document.getElementById('editNotes').value.trim();
 
     // Сохраняем изменения заказа и его позиции в Supabase
-    sbUpdateOrder(o.id, {
+    sbUpdateOrder(o, {
         client_id: o.client_id, created_at: o.created_at,
         delivery_date: o.delivery_date, notes: o.notes,
     });
@@ -880,7 +902,7 @@ window.changeOrderStatus = function(orderId) {
     const o = orders.find(x => x.id === orderId);
     if (!o) return;
     const sel = document.getElementById('modalStatusSelect');
-    if (sel) { o.status = sel.value; sbUpdateOrder(o.id, { status: o.status }); }
+    if (sel) { o.status = sel.value; sbUpdateOrder(o, { status: o.status }); }
     closeModal();
     renderSection(document.querySelector('.nav-item.active').dataset.section);
 };
@@ -1125,7 +1147,7 @@ window.deleteSupplier = function(supplierId) {
     if (!confirm(msg)) return;
     const idx = suppliers.findIndex(x => x.id === supplierId);
     if (idx !== -1) suppliers.splice(idx, 1);
-    sbDeleteSupplier(supplierId);   // удаляем из Supabase
+    sbDeleteSupplier(s);   // удаляем из Supabase
     renderSuppliers();
 };
 
@@ -1704,7 +1726,7 @@ function findOrCreateClient(name, phone) {
     const norm = name.trim().toLowerCase();
     let cl = clients.find(c => c.name.trim().toLowerCase() === norm);
     if (cl) {
-        if (phone && !cl.phone) { cl.phone = phone; sbUpdateClient(cl.id, { phone }); }
+        if (phone && !cl.phone) { cl.phone = phone; sbUpdateClient(cl, { phone }); }
         return cl.id;
     }
     const newId = clients.length ? Math.max(...clients.map(c => c.id)) + 1 : 1;
@@ -1713,10 +1735,6 @@ function findOrCreateClient(name, phone) {
     clients.push(row);
     sbInsertClient(row);            // сохраняем нового клиента в Supabase
     return newId;
-}
-
-async function sbUpdateClient(id, patch) {
-    dbErr('клиент', (await SB.from('clients').update(patch).eq('id', id)).error);
 }
 
 // Найти поставщика по названию или создать нового
@@ -1767,10 +1785,11 @@ window.saveNewOrder = function() {
         created_at: document.getElementById('formCreatedDate').value || new Date().toISOString().slice(0, 10),
         delivery_date: deliveryDate,
         notes: document.getElementById('formNotes').value.trim(),
+        idempotency_key: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()),
         items: items,
     };
     orders.push(newOrder);
-    sbInsertOrder(newOrder);        // сохраняем заказ в Supabase
+    sbInsertOrder(newOrder);        // сохраняем заказ в Supabase (idempotency_key защищает от дабл-клика)
 
     closeModal();
     navigate('orders');
@@ -1838,7 +1857,9 @@ function removeJunkClients() {
 async function fetchAll(table, select = '*') {
     let all = [], from = 0; const size = 1000;
     while (true) {
-        const { data, error } = await SB.from(table).select(select).range(from, from + size - 1);
+        // is('deleted_at', null) — не грузим мягко удалённые записи
+        const { data, error } = await SB.from(table).select(select)
+            .is('deleted_at', null).range(from, from + size - 1);
         if (error) throw error;
         all = all.concat(data);
         if (data.length < size) break;
@@ -1873,6 +1894,7 @@ async function loadData() {
         console.log(`Загружено из Supabase: ${orders.length} заказов, ${clients.length} клиентов, ${suppliers.length} поставщиков, ${transactions.length} транзакций`);
         const initial = location.hash.replace('#', '') || 'dashboard';
         navigate(initial);
+        subscribeRealtime();          // живая синхронизация: чужие правки видны сразу
     } catch (err) {
         console.error('Ошибка загрузки данных:', err);
         document.querySelector('.content').innerHTML = `
@@ -1882,6 +1904,46 @@ async function loadData() {
                 <p style="color:#64748b">Проверьте подключение к интернету и повторите вход.</p>
             </div>`;
     }
+}
+
+// ─── Realtime: живая синхронизация вкладок/пользователей ─────
+// При изменении данных другим пользователем локальные массивы обновляются
+// и активный раздел перерисовывается — без перезагрузки страницы.
+function subscribeRealtime() {
+    const tables = ['clients', 'suppliers', 'orders', 'transactions'];
+    const map = () => ({ clients, suppliers, orders, transactions });
+    tables.forEach(table => {
+        SB.channel('rt_' + table)
+            .on('postgres_changes', { event: '*', schema: 'public', table }, (payload) => {
+                try { applyRealtime(table, payload, map()); } catch (e) { console.warn('rt', e); }
+            })
+            .subscribe();
+    });
+}
+
+function applyRealtime(table, payload, arrays) {
+    const arr = arrays[table];
+    if (!arr) return;
+    const row = payload.new && Object.keys(payload.new).length ? payload.new : payload.old;
+    if (!row) return;
+    const idx = arr.findIndex(x => x.id === row.id);
+    const isDeleted = payload.eventType === 'DELETE' || (payload.new && payload.new.deleted_at);
+
+    if (isDeleted) {
+        if (idx !== -1) arr.splice(idx, 1);
+    } else if (payload.eventType === 'INSERT') {
+        if (idx === -1) arr.push(table === 'orders' ? { ...payload.new, items: [] } : payload.new);
+    } else if (payload.eventType === 'UPDATE') {
+        if (idx !== -1) {
+            if (table === 'orders') {
+                const items = arr[idx].items;          // не затираем локальные позиции
+                Object.assign(arr[idx], payload.new, { items });
+            } else {
+                Object.assign(arr[idx], payload.new);
+            }
+        }
+    }
+    rerenderActiveSection && rerenderActiveSection();
 }
 
 loadData();
