@@ -281,7 +281,7 @@ let transactions = [];
 // ─── Utility ─────────────────────────────────────────────────
 
 const fmt = n => new Intl.NumberFormat('ru-RU').format(Math.round(n));
-const fmtCur = n => fmt(n) + ' ₽';
+const fmtCur = n => fmt(n) + ' ₽';   // неразрывный пробел — «₽» не съезжает на новую строку
 const fmtDate = d => {
     if (!d) return '—';
     const parts = d.split('-');
@@ -327,8 +327,9 @@ function isJunkProductName(name) {
 // Загружаются из таблицы product_hidden; ключ — само название.
 let hiddenProducts = new Set();
 // Товары, добавленные владельцем вручную (могут ещё не встречаться в заказах).
-// Из таблицы product_custom.
+// Из таблицы product_custom. customCatMap: название → выбранная владельцем категория.
 let customProducts = new Set();
+let customCatMap = new Map();
 
 // Список названий продукции для автодополнения — без служебного шлака и скрытых,
 // плюс добавленные вручную
@@ -354,9 +355,16 @@ const PRODUCT_CATEGORIES = [
     ['Услуги/прочее', /доставк|доставить|монтаж|замер|подъем|подъём|рассрочк|манипулятор|занос|самовывоз/i],
 ];
 function productCategory(name) {
+    if (customCatMap.has(name)) return customCatMap.get(name);   // выбранная владельцем вручную
     const n = (name || '').toLowerCase();
     for (const [label, re] of PRODUCT_CATEGORIES) if (re.test(n)) return label;
     return 'Разное';
+}
+// Все доступные категории (стандартные + добавленные владельцем)
+function allProductCategories() {
+    const base = PRODUCT_CATEGORIES.map(c => c[0]);
+    const custom = [...customCatMap.values()].filter(Boolean);
+    return [...new Set([...base, ...custom, 'Разное'])];
 }
 
 window.productCat = window.productCat || 'all';   // фильтр по категории
@@ -463,10 +471,22 @@ window.hideProductName = async function(name) {
 
 // Добавить новый товар в каталог (появится в подсказках при создании заказа)
 window.openAddProductForm = function() {
+    const cats = allProductCategories();
     openModal('Новый товар', `
         <div class="form-group">
             <label>Название товара</label>
             <input type="text" id="newProductName" placeholder="Например: Ветровая планка коричневая" autocomplete="off">
+        </div>
+        <div class="form-group">
+            <label>Категория</label>
+            <div style="display:flex;gap:8px;align-items:center">
+                <select id="newProductCat" style="flex:1" onchange="toggleNewCatInput()">
+                    ${cats.map(c => `<option value="${c.replace(/"/g,'&quot;')}">${c}</option>`).join('')}
+                    <option value="__new__">+ Новая категория…</option>
+                </select>
+            </div>
+            <input type="text" id="newCatName" placeholder="Название новой категории" autocomplete="off"
+                   style="display:none;margin-top:8px">
         </div>
         <div class="form-actions">
             <button class="btn btn-outline" onclick="closeModal()">Отмена</button>
@@ -475,19 +495,33 @@ window.openAddProductForm = function() {
     `);
     setTimeout(() => document.getElementById('newProductName').focus(), 50);
 };
+window.toggleNewCatInput = function() {
+    const sel = document.getElementById('newProductCat');
+    const inp = document.getElementById('newCatName');
+    const isNew = sel.value === '__new__';
+    inp.style.display = isNew ? '' : 'none';
+    if (isNew) inp.focus();
+};
 window.saveNewProductName = async function() {
     const name = document.getElementById('newProductName').value.trim();
     if (!name) { alert('Укажите название товара'); return; }
     if (customProducts.has(name) || getProductNameSuggestions().includes(name)) {
         alert('Такой товар уже есть в списке'); return;
     }
+    let category = document.getElementById('newProductCat').value;
+    if (category === '__new__') {
+        category = document.getElementById('newCatName').value.trim();
+        if (!category) { alert('Впишите название новой категории'); return; }
+    }
     customProducts.add(name);
+    customCatMap.set(name, category);
     hiddenProducts.delete(name);           // если был скрыт — возвращаем
+    window.productCat = category;          // сразу показываем нужную категорию
     closeModal();
     renderProductCatalog();
-    const { error } = await SB.from('product_custom').upsert({ name }, { onConflict: 'name' });
+    const { error } = await SB.from('product_custom').upsert({ name, category }, { onConflict: 'name' });
     await SB.from('product_hidden').delete().eq('name', name);   // снять скрытие, если было
-    if (error) { dbErr('добавление товара', error); customProducts.delete(name); renderProductCatalog(); return; }
+    if (error) { dbErr('добавление товара', error); customProducts.delete(name); customCatMap.delete(name); renderProductCatalog(); return; }
     dbToast('Товар добавлен', true);
 };
 
@@ -2575,11 +2609,12 @@ async function loadData() {
         try {
             const [{ data: hp }, { data: cp }] = await Promise.all([
                 SB.from('product_hidden').select('name'),
-                SB.from('product_custom').select('name'),
+                SB.from('product_custom').select('name, category'),
             ]);
             hiddenProducts = new Set((hp || []).map(r => r.name));
             customProducts = new Set((cp || []).map(r => r.name));
-        } catch (e) { hiddenProducts = new Set(); customProducts = new Set(); }
+            customCatMap = new Map((cp || []).filter(r => r.category).map(r => [r.name, r.category]));
+        } catch (e) { hiddenProducts = new Set(); customProducts = new Set(); customCatMap = new Map(); }
         // Разворачиваем вложенные order_items в o.items (с приведением чисел)
         orders = ordRaw.map(o => {
             const items = (o.order_items || []).map(i => ({

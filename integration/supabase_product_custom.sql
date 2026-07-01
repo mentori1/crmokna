@@ -4,7 +4,8 @@
 create table if not exists product_custom (
     name      text primary key,
     added_at  timestamptz not null default now(),
-    added_by  uuid
+    added_by  uuid,
+    category  text            -- категория, выбранная владельцем (иначе — по ключевым словам)
 );
 alter table product_custom enable row level security;
 drop policy if exists pc_read on product_custom;

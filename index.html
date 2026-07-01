@@ -6,7 +6,7 @@
     <title>Центр окон и дверей — CRM</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=34">
+    <link rel="stylesheet" href="style.css?v=35">
 </head>
 <body>
 
@@ -331,13 +331,13 @@
 
         <!-- ─── Products catalog ─── -->
         <section class="section" id="section-products">
-            <div class="section-header">
-                <h1 class="section-title">Продукция</h1>
+            <h1 class="section-title">Продукция</h1>
+            <p class="text-muted" style="margin:-12px 0 16px">Список названий товаров из заказов. Кнопка «−» убирает мусорное название из подсказок при создании заказа (сами заказы не меняются).</p>
+            <div class="metrics-grid" id="productsMetrics"></div>
+            <div style="display:flex;justify-content:flex-end;margin:16px 0 8px">
                 <button class="btn btn-primary" onclick="openAddProductForm()">+ Добавить товар</button>
             </div>
-            <p class="text-muted" style="margin:-4px 0 16px">Список названий товаров из заказов. Кнопка «−» убирает мусорное название из подсказок при создании заказа (сами заказы не меняются).</p>
-            <div class="metrics-grid" id="productsMetrics"></div>
-            <div class="search-box" style="max-width:none;margin:16px 0 12px">
+            <div class="search-box" style="max-width:none;margin:0 0 12px">
                 <input type="text" id="productSearch" placeholder="Поиск по названию…" autocomplete="off">
             </div>
             <div class="products-layout">
@@ -411,7 +411,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=34"></script>
-<script src="app.js?v=34"></script>
+<script src="supabase-config.js?v=35"></script>
+<script src="app.js?v=35"></script>
 </body>
 </html>
