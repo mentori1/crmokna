@@ -1170,14 +1170,14 @@ ymaps[class*="__suggest"], [class*="ymaps"][class*="__suggest"] { z-index: 10000
     font-family: 'Inter', system-ui, sans-serif;
 }
 .login-bg {
-    position: absolute; inset: -50px;
+    position: absolute; inset: -30px;
     background: url('assets/login-bg.jpg') center/cover no-repeat;
-    filter: blur(7px) saturate(1.05);
-    transform: scale(1.06);
+    filter: saturate(1.05);      /* фото уже размытое (боке) — доп. блюр не нужен */
+    transform: scale(1.04);
 }
 .login-overlay {
     position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(15,23,42,.68) 0%, rgba(15,23,42,.78) 100%);
+    background: linear-gradient(180deg, rgba(15,23,42,.55) 0%, rgba(15,23,42,.7) 100%);
 }
 
 /* Карточка — glassmorphism */
