@@ -42,7 +42,7 @@
     --cyan-50:  #ecfeff;
     --cyan-500: #06b6d4;
 
-    --sidebar-w: 240px;
+    --sidebar-w: 210px;
     --topbar-h:  64px;
     --radius:    8px;
     --shadow:    0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
@@ -366,7 +366,17 @@ body.modal-open { overflow: hidden; }
 }
 
 /* Финансы: месяцы по годам (вертикально) */
-#finMonths { flex-basis: 250px; }
+#finMonths { flex-basis: 200px; }
+/* Таблица операций: фиксированная раскладка — не скроллится, длинный текст переносится */
+#financeTable { table-layout: fixed; }
+#financeTable th, #financeTable td { padding-left: 10px; padding-right: 10px; }
+#financeTable th:nth-child(1), #financeTable td:nth-child(1) { width: 84px; }   /* Дата */
+#financeTable th:nth-child(2), #financeTable td:nth-child(2) { width: 66px; }   /* Тип */
+#financeTable th:nth-child(4), #financeTable td:nth-child(4) { width: 96px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }  /* Заказ */
+#financeTable th:nth-child(5), #financeTable td:nth-child(5) { width: 90px; }   /* Приход */
+#financeTable th:nth-child(6), #financeTable td:nth-child(6) { width: 90px; }   /* Расход */
+/* Контрагент и Описание — переносятся по словам */
+#financeTable td:nth-child(3), #financeTable td:nth-child(7) { white-space: normal; word-break: break-word; }
 #finMonths.product-cats { max-height: 70vh; overflow-y: auto; padding-right: 4px; }
 .fin-year-head {
     display: flex; align-items: center; justify-content: space-between;
