@@ -701,7 +701,7 @@ ymaps[class*="__suggest"], [class*="ymaps"][class*="__suggest"] { z-index: 10000
 #ordersTable th:nth-child(8),  #ordersTable td:nth-child(8)  { width: 104px; }  /* Статус */
 #ordersTable td:nth-child(9)   { word-break: break-word; }                      /* Клиент (остаток) */
 #ordersTable th:nth-child(10), #ordersTable td:nth-child(10) { width: 132px; white-space: nowrap; }   /* Телефон */
-#ordersTable th:nth-child(11), #ordersTable td:nth-child(11) { width: 76px; }   /* Открыть */
+#ordersTable th:nth-child(11), #ordersTable td:nth-child(11) { width: 92px; white-space: nowrap; padding-right: 12px; }   /* Открыть */
 
 .badge-income  { background: var(--green-100); color: var(--green-700); }
 .badge-expense { background: var(--red-100);   color: var(--red-600); }
