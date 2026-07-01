@@ -287,7 +287,10 @@ const fmtDate = d => {
     const parts = d.split('-');
     return `${parts[2]}.${parts[1]}.${parts[0]}`;
 };
-const clientName = id => (clients.find(c => c.id === id) || {}).name || '—';
+// Отображаемое имя клиента: имя, либо (если пусто) адрес, либо «Без имени».
+// Так клиенты-«чистый адрес» видны как «Трубачева 42», а не прочерком.
+const clientLabel = cl => (cl && ((cl.name || '').trim() || (cl.address || '').trim())) || 'Без имени';
+const clientName = id => { const c = clients.find(x => x.id === id); return c ? clientLabel(c) : '—'; };
 const clientPhone = id => (clients.find(c => c.id === id) || {}).phone || '';
 const supplierName = id => (suppliers.find(s => s.id === id) || {}).name || '—';
 const categoryName = id => (categories.find(c => c.id === id) || {}).name || '—';
@@ -1366,8 +1369,8 @@ function renderClients() {
 
     document.getElementById('clientsBody').innerHTML = rows.map(cl => `
         <tr data-client="${cl.id}">
-            <td class="td-bold" data-label="Имя">${cl.name}</td>
-            <td data-label="Телефон">${cl.phone}</td>
+            <td class="td-bold" data-label="Имя">${clientLabel(cl)}${(cl.name || '').trim() ? '' : ' <span class="need-name">нет имени</span>'}</td>
+            <td data-label="Телефон">${cl.phone || '<span class="need-name">нет</span>'}</td>
             <td class="font-mono" data-label="Заказов">${cl.orderCount}</td>
             <td class="font-mono text-right" data-label="Сумма покупок">${fmtCur(cl.totalPurchases)}</td>
             <td class="font-mono text-right ${cl.totalDebt > 0 ? 'text-red' : ''}" data-label="Задолженность">${cl.totalDebt > 0 ? fmtCur(cl.totalDebt) : '—'}</td>
@@ -1382,36 +1385,40 @@ function renderClients() {
 window.openClientDetail = function(clientId) {
     const cl = clients.find(x => x.id === clientId);
     if (!cl) return;
-    const cOrders = orders.filter(o => o.client_id === cl.id);
+    const cOrders = orders.filter(o => o.client_id === cl.id)
+        .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));   // новые сверху
     const totalPurchases = cOrders.reduce((s, o) => s + calcOrder(o).totalSale, 0);
     const totalDebt = cOrders.reduce((s, o) => s + Math.max(0, calcOrder(o).clientDebt), 0);
 
-    openModal('Клиент: ' + cl.name, `
+    openModal('Клиент: ' + clientLabel(cl), `
         <div class="detail-grid">
             <div class="detail-item">
-                <div class="detail-label">Телефон</div>
-                <div class="detail-value">${cl.phone}</div>
+                <div class="detail-label">Имя</div>
+                <div class="detail-value">${(cl.name || '').trim() || '<span class="need-name">не указано</span>'}</div>
             </div>
             <div class="detail-item">
-                <div class="detail-label">Email</div>
-                <div class="detail-value">${cl.email || '—'}</div>
+                <div class="detail-label">Телефон</div>
+                <div class="detail-value">${cl.phone || '<span class="need-name">не указан</span>'}</div>
             </div>
             <div class="detail-item">
                 <div class="detail-label">Адрес</div>
                 <div class="detail-value">${cl.address || '—'}</div>
             </div>
             <div class="detail-item">
-                <div class="detail-label">Заказов</div>
-                <div class="detail-value big">${cOrders.length}</div>
+                <div class="detail-label">Email</div>
+                <div class="detail-value">${cl.email || '—'}</div>
             </div>
             <div class="detail-item">
-                <div class="detail-label">Сумма покупок</div>
-                <div class="detail-value big">${fmtCur(totalPurchases)}</div>
+                <div class="detail-label">Заказов</div>
+                <div class="detail-value big">${cOrders.length}</div>
             </div>
             <div class="detail-item">
                 <div class="detail-label">Задолженность</div>
                 <div class="detail-value big ${totalDebt > 0 ? 'text-red' : 'text-green'}">${totalDebt > 0 ? fmtCur(totalDebt) : 'Нет'}</div>
             </div>
+        </div>
+        <div class="form-actions" style="margin-top:12px">
+            <button class="btn btn-primary" onclick="openClientEditForm(${cl.id})">Редактировать</button>
         </div>
         <div class="detail-section-title">История заказов</div>
         <table class="items-table">
@@ -1428,6 +1435,52 @@ window.openClientDetail = function(clientId) {
             }).join('') : '<tr><td colspan="5" class="empty-state">Нет заказов</td></tr>'}</tbody>
         </table>
     `);
+};
+
+// Редактирование карточки клиента: имя, телефон, адрес, email
+window.openClientEditForm = function(clientId) {
+    const cl = clients.find(x => x.id === clientId);
+    if (!cl) return;
+    const esc = v => (v || '').replace(/"/g, '&quot;');
+    openModal('Редактирование клиента', `
+        <div class="form-grid">
+            <div class="form-group full">
+                <label>Имя (ФИО)</label>
+                <input type="text" id="editCliName" value="${esc(cl.name)}" placeholder="Фамилия Имя Отчество" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label>Телефон</label>
+                <input type="text" id="editCliPhone" class="phone-input" value="${esc(cl.phone)}" placeholder="+7 (___) ___-__-__">
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="editCliEmail" value="${esc(cl.email)}" placeholder="mail@example.com">
+            </div>
+            <div class="form-group full">
+                <label>Адрес</label>
+                <input type="text" id="editCliAddress" value="${esc(cl.address)}" placeholder="ул. Ленина, 10">
+            </div>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-outline" onclick="openClientDetail(${cl.id})">Отмена</button>
+            <button class="btn btn-primary" onclick="saveClientEdit(${cl.id})">Сохранить</button>
+        </div>
+    `);
+};
+window.saveClientEdit = function(clientId) {
+    const cl = clients.find(x => x.id === clientId);
+    if (!cl) return;
+    const patch = {
+        name: document.getElementById('editCliName').value.trim(),
+        phone: document.getElementById('editCliPhone').value.trim(),
+        email: document.getElementById('editCliEmail').value.trim(),
+        address: document.getElementById('editCliAddress').value.trim(),
+    };
+    Object.assign(cl, patch);
+    sbUpdateClient(cl, patch);
+    openClientDetail(cl.id);
+    const active = document.querySelector('.nav-item.active');
+    if (active) renderSection(active.dataset.section);
 };
 
 
@@ -1485,7 +1538,8 @@ window.deleteSupplier = function(supplierId) {
 window.openSupplierDetail = function(supplierId) {
     const s = suppliers.find(x => x.id === supplierId);
     if (!s) return;
-    const sOrders = orders.filter(o => o.items.some(i => i.supplier_id === s.id));
+    const sOrders = orders.filter(o => o.items.some(i => i.supplier_id === s.id))
+        .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));   // новые сверху
     const totalPurchases = sOrders.reduce((sum, o) => {
         return sum + o.items.filter(i => i.supplier_id === s.id).reduce((s2, i) => s2 + i.purchase_price * i.quantity, 0);
     }, 0);
