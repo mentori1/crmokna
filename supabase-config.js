@@ -8,4 +8,4 @@ window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXB
 // Бесплатный, безопасен для браузера (это «API-ключ», НЕ «секретный ключ»).
 // Работает из браузера (CORS), без привязки к домену — заводится сразу.
 // Получить: dadata.ru → Личный кабинет → API-ключ. Без токена поле — обычный текст.
-window.DADATA_TOKEN = '';
+window.DADATA_TOKEN = '7a811bb93d00b1e35d878e19410e3582fa51352f';
