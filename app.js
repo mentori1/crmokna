@@ -21,9 +21,10 @@ async function ensureAuthenticated() {
             const errEl = document.getElementById('loginError');
             errEl.classList.remove('show');
             const btn = e.target.querySelector('button[type=submit]');
-            btn.disabled = true; btn.textContent = 'Вход…';
+            const lbl = document.getElementById('loginBtnLabel');
+            btn.disabled = true; if (lbl) lbl.textContent = 'Вход…';
             const { error } = await SB.auth.signInWithPassword({ email, password });
-            btn.disabled = false; btn.textContent = 'Войти';
+            btn.disabled = false; if (lbl) lbl.textContent = 'Войти';
             if (error) {
                 errEl.textContent = 'Неверный email или пароль';
                 errEl.classList.add('show');
@@ -41,6 +42,22 @@ window.logout = async function() {
     await SB.auth.signOut();
     location.reload();
 };
+
+// Логин: показать/скрыть пароль + «Забыли пароль?»
+(function initLoginUI() {
+    const eye = document.getElementById('loginEye');
+    const pass = document.getElementById('loginPass');
+    if (eye && pass) eye.addEventListener('click', () => {
+        pass.type = pass.type === 'password' ? 'text' : 'password';
+        eye.style.color = pass.type === 'text' ? '#2563EB' : '';
+    });
+    const forgot = document.getElementById('loginForgot');
+    if (forgot) forgot.addEventListener('click', e => {
+        e.preventDefault();
+        const err = document.getElementById('loginError');
+        if (err) { err.textContent = 'Сброс пароля — через администратора CRM.'; err.classList.add('show'); }
+    });
+})();
 
 // §3.3 — Кнопка «Скачать бэкап»: выгрузка всех данных в JSON-файл
 window.exportBackup = function() {
