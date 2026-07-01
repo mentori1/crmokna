@@ -42,6 +42,25 @@ window.logout = async function() {
     location.reload();
 };
 
+// §3.3 — Кнопка «Скачать бэкап»: выгрузка всех данных в JSON-файл
+window.exportBackup = function() {
+    const dump = {
+        exported_at: new Date().toISOString(),
+        source: 'Центр окон и дверей — CRM',
+        clients, suppliers,
+        orders: orders.map(o => ({ ...o })),
+        transactions,
+    };
+    const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `crm-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    dbToast('Бэкап скачан', true);
+};
+
 // ─── Запись в Supabase (persistence) ─────────────────────────
 // Модель: optimistic UI — локальные массивы обновляются сразу (мгновенный
 // отклик), а в фоне пишем в БД. Ошибку показываем тостом, но UI не блокируем.
@@ -82,19 +101,80 @@ async function handleConflict(table, localObj) {
     if (data) { Object.assign(localObj, data); rerenderActiveSection && rerenderActiveSection(); }
 }
 
-async function sbInsertOrder(o) {
+// ─── Очередь операций записи (переживает перезагрузку, ретраи) ──
+// §2.5/2.6: несохранённые изменения не теряются при обрыве сети — копятся
+// в localStorage и досылаются с нарастающей паузой (5с→15с→45с→2м→5м).
+const OPS_KEY = 'sb_pending_ops_v1';
+let opsQueue = [];
+let opsProcessing = false;
+try { opsQueue = JSON.parse(localStorage.getItem(OPS_KEY) || '[]'); } catch (e) { opsQueue = []; }
+function saveOps() {
+    try {
+        // _orderRef — живая ссылка, не сериализуем (после reload не нужна)
+        localStorage.setItem(OPS_KEY, JSON.stringify(opsQueue.map(({ _orderRef, ...op }) => op)));
+    } catch (e) {}
+}
+function enqueueOp(op) { op.retries = 0; opsQueue.push(op); saveOps(); processOps(); }
+
+// Сетевая/временная ошибка — ретраим; логическая (constraint/RLS) — нет.
+function isNetworkError(err) {
+    if (!err) return false;
+    const code = err.code || '';
+    if (/^(23|42|22|PGRST)/.test(code)) return false;    // constraint/RLS/тип — не ретраить
+    return /fetch|network|timeout|failed|load|50[234]/i.test((err.message || '') + code);
+}
+
+// Выполнить операцию. Вернёт 'ok'|'drop'; при сетевой ошибке — throw (ретрай).
+async function execOp(op) {
+    if (op.t === 'insOrder') {
+        const { data, error } = await SB.rpc('create_order', { p_order: op.order, p_items: op.items || [] });
+        if (error) {
+            if (error.code === '23505') {           // коллизия id — перегенерируем и повторим
+                op.order.id = nextLocalId(orders);
+                if (op._orderRef) op._orderRef.id = op.order.id;
+                throw error;
+            }
+            if (isNetworkError(error)) throw error;
+            return 'drop';
+        }
+        if (data && op._orderRef) op._orderRef.id = data;  // серверный id заказа
+        return 'ok';
+    }
+    if (op.t === 'insTx' || op.t === 'insClient' || op.t === 'insSupplier') {
+        const table = { insTx: 'transactions', insClient: 'clients', insSupplier: 'suppliers' }[op.t];
+        const { error } = await SB.from(table).insert(op.row);
+        if (error) { if (isNetworkError(error)) throw error; return 'drop'; }
+        return 'ok';
+    }
+    return 'drop';
+}
+
+async function processOps() {
+    if (opsProcessing || !opsQueue.length) return;
+    opsProcessing = true;
+    while (opsQueue.length) {
+        const op = opsQueue[0];
+        try {
+            await execOp(op);
+            opsQueue.shift(); saveOps();
+        } catch (e) {
+            op.retries = (op.retries || 0) + 1;
+            if (op.retries > 8) { opsQueue.shift(); saveOps(); dbToast('Не сохранено после нескольких попыток', false); continue; }
+            const delay = Math.min(300000, 5000 * Math.pow(3, op.retries - 1));
+            opsProcessing = false;
+            dbToast(`Нет связи — повтор через ${Math.round(delay / 1000)}с (в очереди: ${opsQueue.length})`, false);
+            setTimeout(processOps, delay);
+            return;
+        }
+    }
+    opsProcessing = false;
+    dbToast('Сохранено', true);
+}
+window.addEventListener('online', processOps);   // сеть вернулась — досылаем
+
+function sbInsertOrder(o) {
     const { items, ...row } = o;
-    const { error } = await SB.from('orders').insert(row);
-    if (error) {
-        if (error.code === '23505') { dbToast('Заказ уже создан', true); return; } // дабл-клик
-        return dbErr('заказ', error);
-    }
-    if (items && items.length) {
-        const { error: e2 } = await SB.from('order_items')
-            .insert(items.map(i => ({ ...i, order_id: o.id })));
-        dbErr('позиции заказа', e2);
-    }
-    dbToast('Заказ сохранён', true);
+    enqueueOp({ t: 'insOrder', order: row, items: (items || []).map(i => ({ ...i })), _orderRef: o });
 }
 function sbUpdateOrder(o, patch) { return sbUpdate('orders', o, patch, 'обновление заказа'); }
 function sbUpdateClient(c, patch) { return sbUpdate('clients', c, patch, 'клиент'); }
@@ -106,12 +186,10 @@ async function sbReplaceItems(orderId, items) {
         dbErr('позиции заказа', error);
     }
 }
-async function sbInsertTransaction(t) {
-    const { error } = await SB.from('transactions').insert(t);
-    if (error) dbErr('платёж', error); else dbToast('Платёж сохранён', true);
-}
-async function sbInsertClient(c) { dbErr('клиент', (await SB.from('clients').insert(c)).error); }
-async function sbInsertSupplier(s) { dbErr('поставщик', (await SB.from('suppliers').insert(s)).error); }
+function sbInsertTransaction(t) { enqueueOp({ t: 'insTx', row: t }); }
+function sbInsertClient(c) { enqueueOp({ t: 'insClient', row: c }); }
+function sbInsertSupplier(s) { enqueueOp({ t: 'insSupplier', row: s }); }
+function nextLocalId(arr) { return arr.length ? Math.max(...arr.map(x => x.id)) + 1 : 1; }
 // Soft-delete: помечаем deleted_at (можно восстановить), физически не удаляем.
 async function sbDeleteSupplier(s) {
     const ok = await sbUpdate('suppliers', s, { deleted_at: new Date().toISOString() }, 'удаление поставщика');
