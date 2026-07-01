@@ -6,7 +6,7 @@
     <title>Центр окон и дверей — CRM</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=22">
+    <link rel="stylesheet" href="style.css?v=27">
 </head>
 <body>
 
@@ -225,7 +225,6 @@
                             <th>Клиент</th>
                             <th>Продукция</th>
                             <th>Поставщик</th>
-                            <th>Статус заказа</th>
                             <th>Статус доставки</th>
                         </tr>
                     </thead>
@@ -289,22 +288,12 @@
                 <h2>Движение денежных средств</h2>
                 <button class="btn btn-primary" id="btnNewTransaction">+ Операция</button>
             </div>
-            <div class="filters-bar">
-                <div class="filter-group">
-                    <label>Тип:</label>
-                    <select id="filterTxType">
-                        <option value="">Все</option>
-                        <option value="income">Приход</option>
-                        <option value="expense">Расход</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label>Период:</label>
-                    <input type="date" id="filterTxFrom">
-                    <span>—</span>
-                    <input type="date" id="filterTxTo">
-                </div>
+            <div class="fin-toggle" id="finTypeToggle">
+                <button class="fin-tab active" data-fintype="">Все</button>
+                <button class="fin-tab" data-fintype="income">Доходы</button>
+                <button class="fin-tab" data-fintype="expense">Расходы</button>
             </div>
+            <div class="month-tabs" id="finMonths"></div>
             <div class="table-wrapper">
                 <table class="data-table" id="financeTable">
                     <thead>
@@ -368,7 +357,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=22"></script>
-<script src="app.js?v=22"></script>
+<script src="supabase-config.js?v=27"></script>
+<script src="app.js?v=27"></script>
 </body>
 </html>

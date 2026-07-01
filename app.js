@@ -178,6 +178,26 @@ function sbInsertOrder(o) {
 }
 function sbUpdateOrder(o, patch) { return sbUpdate('orders', o, patch, 'обновление заказа'); }
 function sbUpdateClient(c, patch) { return sbUpdate('clients', c, patch, 'клиент'); }
+function sbUpdateSupplier(s, patch) { return sbUpdate('suppliers', s, patch, 'поставщик'); }
+
+// Форматирование телефона в вид +7 (XXX) XXX-XX-XX.
+// Сам подставляет +7: если начали с 8 — меняем на 7; если ввели номер
+// без кода страны (начинается с 9 и т.п.) — код 7 добавляется автоматически.
+function formatPhoneRu(raw) {
+    let d = (raw || '').replace(/\D/g, '');
+    if (!d) return '';
+    if (d[0] === '8') d = '7' + d.slice(1);
+    if (d[0] !== '7') d = '7' + d;          // ввели без кода страны → добавляем 7
+    d = d.slice(0, 11);
+    const n = d.slice(1);                    // до 10 цифр национального номера
+    let out = '+7';
+    if (n.length) out += ' (' + n.slice(0, 3);
+    if (n.length >= 3) out += ')';
+    if (n.length > 3) out += ' ' + n.slice(3, 6);
+    if (n.length > 6) out += '-' + n.slice(6, 8);
+    if (n.length > 8) out += '-' + n.slice(8, 10);
+    return out;
+}
 async function sbReplaceItems(orderId, items) {
     await SB.from('order_items').delete().eq('order_id', orderId);
     if (items && items.length) {
@@ -695,7 +715,6 @@ function renderDelivery() {
             <td data-label="Клиент">${clientName(o.client_id)}<br><span class="text-muted" style="font-size:12px">${clientPhone(o.client_id)}</span></td>
             <td data-label="Продукция">${product}</td>
             <td data-label="Поставщик">${supplierIds.map(supplierName).join(', ') || '—'}</td>
-            <td data-label="Статус заказа"><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></td>
             <td data-label="Статус доставки">
                 <select class="delivery-select" data-order="${o.id}" onclick="event.stopPropagation()">
                     ${Object.entries(DELIVERY_STATUS_LABELS).map(([k, v]) =>
@@ -703,11 +722,16 @@ function renderDelivery() {
                 </select>
             </td>
         </tr>`;
-    }).join('') : '<tr><td colspan="7" class="empty-state">Нет открытых заказов</td></tr>';
+    }).join('') : '<tr><td colspan="6" class="empty-state">Нет открытых заказов</td></tr>';
 
-    // Клик по строке — открыть карточку заказа
+    // Клик по строке — открыть карточку заказа.
+    // Клик по выпадающему списку статуса НЕ открывает карточку (иначе на телефоне
+    // тап по списку открывал заказ вместо смены статуса).
     document.querySelectorAll('#deliveryBody tr[data-order]').forEach(tr => {
-        tr.addEventListener('click', () => openOrderDetail(+tr.dataset.order));
+        tr.addEventListener('click', (e) => {
+            if (e.target.closest('.delivery-select')) return;
+            openOrderDetail(+tr.dataset.order);
+        });
     });
 
     document.querySelectorAll('.delivery-select').forEach(sel => {
@@ -715,7 +739,9 @@ function renderDelivery() {
             e.stopPropagation();
             const o = orders.find(x => x.id === +sel.dataset.order);
             if (o) { o.delivery_status = sel.value === 'none' ? null : sel.value; sbUpdateOrder(o, { delivery_status: o.delivery_status }); }
-            renderDelivery();
+            // Перерисовку откладываем, чтобы нативный список на телефоне успел
+            // зафиксировать выбор до пересборки строки.
+            setTimeout(renderDelivery, 0);
         });
     });
 }
@@ -893,7 +919,8 @@ window.openOrderEditForm = function(orderId) {
             </div>
             <div class="form-group">
                 <label>Телефон</label>
-                <input type="text" id="editClientPhone" value="${(client.phone||'').replace(/"/g,'&quot;')}" placeholder="+7 (___) ___-__-__">
+                <input type="text" id="editClientPhone" class="phone-input" value="${(client.phone||'').replace(/"/g,'&quot;')}" placeholder="+7 (___) ___-__-__">
+                <div id="editClientMatch" class="client-match-hint"></div>
             </div>
             <div class="form-group">
                 <label>Дата создания</label>
@@ -1201,6 +1228,7 @@ function renderSuppliers() {
             <td class="font-mono text-right ${s.debt > 0 ? 'text-red' : ''}" data-label="Задолженность">${s.debt > 0 ? fmtCur(s.debt) : '—'}</td>
             <td data-label="" class="row-actions">
                 <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openSupplierDetail(${s.id})">Карточка</button>
+                <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openSupplierForm(${s.id})">Изменить</button>
                 <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteSupplier(${s.id})">Удалить</button>
             </td>
         </tr>`).join('');
@@ -1284,7 +1312,69 @@ window.openSupplierDetail = function(supplierId) {
                 </tr>`;
             }).join('')}</tbody>
         </table>
+        <div class="form-actions">
+            <button class="btn btn-primary" onclick="openSupplierForm(${s.id})">Редактировать</button>
+        </div>
     `);
+};
+
+// Добавление / редактирование поставщика.
+window.openSupplierForm = function(supplierId) {
+    const s = supplierId ? suppliers.find(x => x.id === supplierId) : null;
+    const esc = v => (v || '').replace(/"/g, '&quot;');
+    openModal(s ? 'Редактирование поставщика' : 'Новый поставщик', `
+        <div class="form-grid">
+            <div class="form-group full">
+                <label>Название</label>
+                <input type="text" id="supName" value="${esc(s?.name)}" placeholder="Название поставщика" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label>Контактное лицо</label>
+                <input type="text" id="supContact" value="${esc(s?.contact_person)}" placeholder="Имя">
+            </div>
+            <div class="form-group">
+                <label>Телефон</label>
+                <input type="text" id="supPhone" class="phone-input" value="${esc(s?.phone)}" placeholder="+7 (___) ___-__-__">
+            </div>
+            <div class="form-group full">
+                <label>Email</label>
+                <input type="email" id="supEmail" value="${esc(s?.email)}" placeholder="mail@example.com">
+            </div>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-outline" onclick="closeModal()">Отмена</button>
+            <button class="btn btn-primary" onclick="saveSupplier(${supplierId || 0})">Сохранить</button>
+        </div>
+    `);
+};
+
+window.saveSupplier = function(supplierId) {
+    const name = document.getElementById('supName').value.trim();
+    if (!name) { alert('Укажите название поставщика'); return; }
+    const contact = document.getElementById('supContact').value.trim();
+    const phone = document.getElementById('supPhone').value.trim();
+    const email = document.getElementById('supEmail').value.trim();
+    const norm = name.toLowerCase();
+
+    if (supplierId) {
+        const s = suppliers.find(x => x.id === supplierId);
+        if (!s) return;
+        if (suppliers.some(x => x.id !== supplierId && x.name.trim().toLowerCase() === norm)) {
+            alert('Поставщик с таким названием уже есть'); return;
+        }
+        const patch = { name, contact_person: contact, phone, email };
+        Object.assign(s, patch);
+        sbUpdateSupplier(s, patch);
+    } else {
+        if (suppliers.some(x => x.name.trim().toLowerCase() === norm)) {
+            alert('Поставщик с таким названием уже есть'); return;
+        }
+        const row = { id: nextLocalId(suppliers), name, contact_person: contact, phone, email };
+        suppliers.push(row);
+        sbInsertSupplier(row);
+    }
+    closeModal();
+    renderSuppliers();
 };
 
 
@@ -1324,14 +1414,40 @@ function renderFinances() {
         </div>
     `;
 
-    const txType = document.getElementById('filterTxType').value;
-    const txFrom = document.getElementById('filterTxFrom').value;
-    const txTo = document.getElementById('filterTxTo').value;
+    // Выбор: Все / Доходы / Расходы  +  разбивка по месяцам
+    const type = window.finType || '';           // '', income, expense
+    const typed = type ? transactions.filter(t => t.type === type) : transactions;
 
-    let filtered = [...transactions];
-    if (txType) filtered = filtered.filter(t => t.type === txType);
-    if (txFrom) filtered = filtered.filter(t => t.date >= txFrom);
-    if (txTo) filtered = filtered.filter(t => t.date <= txTo);
+    // Суммы по месяцам для выбранного типа
+    const monthSum = {};
+    typed.forEach(t => {
+        const m = (t.date || '').slice(0, 7);
+        if (m) monthSum[m] = (monthSum[m] || 0) + t.amount;
+    });
+    const months = Object.keys(monthSum).sort().reverse();
+    const totalAll = typed.reduce((s, t) => s + t.amount, 0);
+
+    const sumClass = type === 'income' ? 'is-income' : type === 'expense' ? 'is-expense' : '';
+    const tab = (val, label, sum) =>
+        `<button class="month-tab ${sumClass} ${window.finMonth === val ? 'active' : ''}" data-fmonth="${val}">
+            ${label} · <b>${fmtCur(sum)}</b>
+        </button>`;
+    let tabsHtml = tab('', 'Всё время', totalAll);
+    months.forEach(m => {
+        const [y, mo] = m.split('-');
+        tabsHtml += tab(m, `${MONTH_NAMES_FULL[+mo - 1]} ${y.slice(2)}`, monthSum[m]);
+    });
+    const finMonthsBox = document.getElementById('finMonths');
+    finMonthsBox.innerHTML = tabsHtml;
+    finMonthsBox.querySelectorAll('.month-tab').forEach(btn => {
+        btn.addEventListener('click', () => { window.finMonth = btn.dataset.fmonth; renderFinances(); });
+    });
+    // Подсветка активной кнопки Все/Доходы/Расходы
+    document.querySelectorAll('#finTypeToggle .fin-tab').forEach(b =>
+        b.classList.toggle('active', (b.dataset.fintype || '') === type));
+
+    let filtered = [...typed];
+    if (window.finMonth) filtered = filtered.filter(t => (t.date || '').slice(0, 7) === window.finMonth);
     filtered.sort((a, b) => b.date.localeCompare(a.date));
 
     document.getElementById('financeBody').innerHTML = filtered.length ? filtered.map(t => {
@@ -1348,9 +1464,16 @@ function renderFinances() {
     }).join('') : '<tr><td colspan="7" class="empty-state">Нет операций</td></tr>';
 }
 
-document.getElementById('filterTxType').addEventListener('change', renderFinances);
-document.getElementById('filterTxFrom').addEventListener('change', renderFinances);
-document.getElementById('filterTxTo').addEventListener('change', renderFinances);
+window.finType = window.finType || '';    // '', income, expense
+window.finMonth = window.finMonth || '';   // '', 'YYYY-MM'
+// Переключатель Все / Доходы / Расходы
+document.querySelectorAll('#finTypeToggle .fin-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        window.finType = btn.dataset.fintype || '';
+        window.finMonth = '';               // сбрасываем месяц при смене типа
+        renderFinances();
+    });
+});
 
 // Кнопка «+ Операция» в Финансах
 document.getElementById('btnNewTransaction').addEventListener('click', () => {
@@ -1617,8 +1740,8 @@ searchInput.addEventListener('input', () => {
 
     const matchedClients = clients.filter(c =>
         c.name.toLowerCase().includes(q) ||
-        c.phone.replace(/\D/g, '').includes(q.replace(/\D/g, ''))
-    ).slice(0, 5);
+        (qDigits && c.phone.replace(/\D/g, '').includes(qDigits))   // без цифр includes('') давал ВСЕХ
+    ).slice(0, 8);
     if (matchedClients.length) {
         html += '<div class="search-group-title">Клиенты</div>';
         matchedClients.forEach(c => {
@@ -1754,7 +1877,8 @@ function openNewOrderForm() {
             </div>
             <div class="form-group">
                 <label>Телефон</label>
-                <input type="text" id="formClientPhone" placeholder="+7 (___) ___-__-__">
+                <input type="text" id="formClientPhone" class="phone-input" placeholder="+7 (___) ___-__-__">
+                <div id="formClientMatch" class="client-match-hint"></div>
             </div>
             <div class="form-group">
                 <label>Дата создания</label>
@@ -1799,16 +1923,45 @@ window.addOrderItemRow = function() {
     document.getElementById('orderItemsContainer').insertAdjacentHTML('beforeend', orderItemRowHTML());
 };
 
-// Найти существующего клиента по имени (без учёта регистра) или создать нового
-function findOrCreateClient(name, phone) {
-    const norm = name.trim().toLowerCase();
-    let cl = clients.find(c => c.name.trim().toLowerCase() === norm);
+// Телефон → 10 цифр национального номера (для сравнения независимо от формата)
+function normPhone(p) {
+    let d = (p || '').replace(/\D/g, '');
+    if (d[0] === '8') d = '7' + d.slice(1);
+    if (d.length === 10) d = '7' + d;
+    return d.length >= 11 ? d.slice(-10) : (d.length === 10 ? d : '');
+}
+
+// Найти клиента по номеру телефона (номер у клиента один, а имя менеджеры
+// пишут по-разному). Если под номером несколько записей — берём «главную»:
+// с наибольшим числом заказов, при равенстве — с меньшим id.
+function findClientByPhone(phone) {
+    const n = normPhone(phone);
+    if (!n) return null;
+    const matches = clients.filter(c => normPhone(c.phone) === n);
+    if (matches.length <= 1) return matches[0] || null;
+    return matches
+        .map(c => ({ c, cnt: orders.filter(o => o.client_id === c.id).length }))
+        .sort((a, b) => b.cnt - a.cnt || a.c.id - b.c.id)[0].c;
+}
+
+// Найти существующего клиента (сначала по телефону, затем по имени) или создать
+function findOrCreateClient(name, phone, address) {
+    // Приоритет — телефон: имя может отличаться (Женя/Евгений/Евгеша), номер один
+    let cl = findClientByPhone(phone);
+    if (!cl) {
+        const norm = name.trim().toLowerCase();
+        cl = clients.find(c => c.name.trim().toLowerCase() === norm);
+    }
     if (cl) {
-        if (phone && !cl.phone) { cl.phone = phone; sbUpdateClient(cl, { phone }); }
+        // Дозаполняем телефон/адрес у существующего клиента, если их ещё не было
+        const patch = {};
+        if (phone && !cl.phone) patch.phone = phone;
+        if (address && !cl.address) patch.address = address;
+        if (Object.keys(patch).length) { Object.assign(cl, patch); sbUpdateClient(cl, patch); }
         return cl.id;
     }
     const newId = clients.length ? Math.max(...clients.map(c => c.id)) + 1 : 1;
-    const row = { id: newId, name: name.trim(), phone: phone || '', email: '', address: '',
+    const row = { id: newId, name: name.trim(), phone: phone || '', email: '', address: address || '',
                   created_at: new Date().toISOString().slice(0, 10) };
     clients.push(row);
     sbInsertClient(row);            // сохраняем нового клиента в Supabase
@@ -1850,7 +2003,8 @@ window.saveNewOrder = function() {
     });
     if (!items.length) { alert('Добавьте хотя бы одну позицию продукции'); return; }
 
-    const clientId = findOrCreateClient(clientName, clientPhone);
+    const clientAddress = document.getElementById('formDeliveryAddr').value.trim();
+    const clientId = findOrCreateClient(clientName, clientPhone, clientAddress);
     const newId = orders.length ? Math.max(...orders.map(o => o.id)) + 1 : 1;
     const deliveryDate = document.getElementById('formDeliveryDate').value || null;
 
@@ -1875,6 +2029,55 @@ window.saveNewOrder = function() {
 
 document.getElementById('btnNewOrder').addEventListener('click', openNewOrderForm);
 document.getElementById('btnNewOrder2').addEventListener('click', openNewOrderForm);
+document.getElementById('btnNewSupplier').addEventListener('click', () => openSupplierForm());
+
+// Живое форматирование телефона (+7 подставляется само) во всех полях .phone-input
+document.addEventListener('input', e => {
+    const t = e.target;
+    if (t && t.classList && t.classList.contains('phone-input')) {
+        const f = formatPhoneRu(t.value);
+        if (t.value !== f) { t.value = f; }
+    }
+});
+
+// Автозаполнение телефона и адреса при выборе клиента из базы по ИМЕНИ.
+// Срабатывает, когда введённое ФИО точно совпадает с клиентом (выбор из списка).
+document.addEventListener('input', e => {
+    const t = e.target;
+    if (!t || (t.id !== 'formClientName' && t.id !== 'editClientName')) return;
+    const cl = clients.find(c => c.name.trim().toLowerCase() === t.value.trim().toLowerCase());
+    if (!cl) return;
+    const phoneEl = document.getElementById(t.id === 'formClientName' ? 'formClientPhone' : 'editClientPhone');
+    if (phoneEl && !phoneEl.value.trim() && cl.phone) phoneEl.value = formatPhoneRu(cl.phone);
+    const addrEl = document.getElementById('formDeliveryAddr');   // адрес есть только в форме нового заказа
+    if (addrEl && !addrEl.value.trim() && cl.address) addrEl.value = cl.address;
+});
+
+// Поиск клиента по НОМЕРУ телефона (главный способ: номер один, а имена разные).
+// Как только введены 10 цифр — ищем клиента и подставляем имя/адрес + показываем,
+// что клиент найден в базе. Работает в форме нового заказа и редактирования.
+document.addEventListener('input', e => {
+    const t = e.target;
+    if (!t || (t.id !== 'formClientPhone' && t.id !== 'editClientPhone')) return;
+    const isNew = t.id === 'formClientPhone';
+    const hint = document.getElementById(isNew ? 'formClientMatch' : 'editClientMatch');
+    if (normPhone(t.value).length !== 10) { if (hint) hint.textContent = ''; return; }
+    const cl = findClientByPhone(t.value);
+    const nameEl = document.getElementById(isNew ? 'formClientName' : 'editClientName');
+    if (!cl) {
+        if (hint) { hint.textContent = 'Новый номер — клиента в базе нет'; hint.className = 'client-match-hint is-new'; }
+        return;
+    }
+    // Клиент найден по номеру — подставляем имя (если поле пустое) и адрес
+    if (nameEl && !nameEl.value.trim()) nameEl.value = cl.name;
+    const addrEl = document.getElementById('formDeliveryAddr');
+    if (addrEl && !addrEl.value.trim() && cl.address) addrEl.value = cl.address;
+    if (hint) {
+        const ordCnt = orders.filter(o => o.client_id === cl.id).length;
+        hint.textContent = `Найден в базе: ${cl.name}${ordCnt ? ` · заказов: ${ordCnt}` : ''}`;
+        hint.className = 'client-match-hint is-found';
+    }
+});
 
 
 // ─── Modal management ────────────────────────────────────────
@@ -1883,10 +2086,12 @@ function openModal(title, bodyHTML) {
     document.getElementById('modalTitle').textContent = title;
     document.getElementById('modalBody').innerHTML = bodyHTML;
     document.getElementById('modalOverlay').classList.add('open');
+    document.body.classList.add('modal-open');   // блокируем скролл страницы под окном
 }
 
 function closeModal() {
     document.getElementById('modalOverlay').classList.remove('open');
+    document.body.classList.remove('modal-open');
 }
 
 document.getElementById('modalClose').addEventListener('click', closeModal);

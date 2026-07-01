@@ -62,6 +62,8 @@ body {
     max-width: 100%;
     overflow-x: hidden;  /* защита от случайного горизонтального скролла */
 }
+/* Пока открыто модальное окно — страница под ним не скроллится */
+body.modal-open { overflow: hidden; }
 
 /* ─── Sidebar ─────────────────────────────────────────── */
 
@@ -198,10 +200,14 @@ body {
 .main {
     margin-left: var(--sidebar-w);
     flex: 1;
+    min-width: 0;          /* критично: без этого широкий контент (лента месяцев,
+                              таблицы) распирает flex-контейнер за пределы экрана */
     display: flex;
     flex-direction: column;
     min-height: 100vh;
 }
+.content { min-width: 0; }
+.section { min-width: 0; }
 
 /* ─── Topbar ──────────────────────────────────────────── */
 
@@ -378,6 +384,23 @@ body {
     background: var(--slate-100); color: var(--slate-500);
 }
 .month-tab.active .month-count { background: rgba(255,255,255,.25); color: #fff; }
+
+/* Финансы: переключатель Все / Доходы / Расходы */
+.fin-toggle { display: inline-flex; gap: 4px; padding: 4px;
+    background: var(--slate-100); border-radius: 12px; margin-bottom: 16px; }
+.fin-tab {
+    padding: 8px 20px; border: none; border-radius: 9px; background: transparent;
+    font-size: 14px; font-weight: 600; color: var(--slate-500); cursor: pointer;
+    transition: all .15s;
+}
+.fin-tab:hover { color: var(--slate-800); }
+.fin-tab.active { background: #fff; color: var(--slate-900); box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,.1)); }
+.fin-tab[data-fintype="income"].active { color: var(--green, #16a34a); }
+.fin-tab[data-fintype="expense"].active { color: var(--red, #dc2626); }
+/* Цвет суммы в ленте месяцев в зависимости от типа */
+.month-tab.is-income b { color: var(--green, #16a34a); }
+.month-tab.is-expense b { color: var(--red, #dc2626); }
+.month-tab.active.is-income b, .month-tab.active.is-expense b { color: #fff; }
 
 /* ─── Metrics cards ───────────────────────────────────── */
 
@@ -579,6 +602,12 @@ body {
    дефолтной ширины и раздувают грид/флекс шире экрана (контент уезжает) */
 .form-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .form-group.full { grid-column: 1 / -1; }
+
+/* Подсказка «клиент найден по номеру» под полем телефона */
+.client-match-hint { font-size: 12px; line-height: 1.3; min-height: 0; }
+.client-match-hint:empty { display: none; }
+.client-match-hint.is-found { color: var(--green, #16a34a); font-weight: 600; }
+.client-match-hint.is-new   { color: var(--slate-400, #94a3b8); }
 
 .form-group label {
     font-size: 12px; font-weight: 600;
