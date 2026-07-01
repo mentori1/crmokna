@@ -2473,68 +2473,39 @@ document.getElementById('ordersMonthsToggle').addEventListener('click', () => {
     applyOrdersMonthsState();
 });
 
-// ─── Подсказки адреса (Яндекс.Карты, Geosuggest) ─────────────
-// Работает на полях с классом .addr-suggest (адрес доставки в заказе, адрес
-// клиента). Без ключа (window.YANDEX_SUGGEST_KEY) поле — обычный текст.
-let addrSuggestTimer = null;
-function addrBox() {
-    let box = document.getElementById('addrSuggestBox');
-    if (!box) {
-        box = document.createElement('div');
-        box.id = 'addrSuggestBox';
-        box.className = 'addr-suggest-box';
-        document.body.appendChild(box);
-    }
-    return box;
-}
-async function fetchYandexSuggest(q) {
+// ─── Подсказки адреса (Яндекс.Карты, SuggestView) ────────────
+// Официальный браузерный способ: подгружаем JS-API Яндекса и вешаем SuggestView
+// на поля с классом .addr-suggest (адрес в заказе/клиенте). Обходит CORS и
+// авторизуется ключом. Без ключа (window.YANDEX_SUGGEST_KEY) — обычный текст.
+let ymapsLoadPromise = null;
+function loadYandexMaps() {
+    if (window.ymaps && window.ymaps.SuggestView) return Promise.resolve();
+    if (ymapsLoadPromise) return ymapsLoadPromise;
     const key = window.YANDEX_SUGGEST_KEY;
-    if (!key) return [];
-    const url = `https://suggest-maps.yandex.ru/v1/suggest?apikey=${key}` +
-        `&text=${encodeURIComponent(q)}&lang=ru_RU&results=7&print_address=1` +
-        `&types=house,street,locality,district`;
-    try {
-        const r = await fetch(url);
-        if (!r.ok) return [];
-        const d = await r.json();
-        return (d.results || []).map(x => {
-            const fa = x.address && x.address.formatted_address;
-            const title = (x.title && x.title.text) || '';
-            const sub = (x.subtitle && x.subtitle.text) || '';
-            return { text: fa || [sub, title].filter(Boolean).join(', '), title, sub };
-        }).filter(x => x.text);
-    } catch (e) { return []; }
+    if (!key) return Promise.reject(new Error('no key'));
+    ymapsLoadPromise = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = `https://api-maps.yandex.ru/2.1/?apikey=${key}&lang=ru_RU&load=SuggestView`;
+        s.onload = () => window.ymaps.ready(resolve);
+        s.onerror = () => reject(new Error('yandex maps script failed'));
+        document.head.appendChild(s);
+    });
+    return ymapsLoadPromise;
 }
-document.addEventListener('input', e => {
+const addrSuggestAttached = new WeakSet();
+document.addEventListener('focusin', async e => {
     const t = e.target;
     if (!t.classList || !t.classList.contains('addr-suggest')) return;
-    const box = addrBox();
-    clearTimeout(addrSuggestTimer);
-    const q = t.value.trim();
-    if (!window.YANDEX_SUGGEST_KEY || q.length < 3) { box.style.display = 'none'; return; }
-    addrSuggestTimer = setTimeout(async () => {
-        const items = await fetchYandexSuggest(q);
-        if (!items.length || document.activeElement !== t) { box.style.display = 'none'; return; }
-        box.innerHTML = items.map((it, i) =>
-            `<div class="addr-suggest-item" data-i="${i}">${it.text.replace(/</g, '&lt;')}</div>`).join('');
-        box._items = items;
-        const r = t.getBoundingClientRect();
-        box.style.left = r.left + 'px';
-        box.style.top = (r.bottom + 2) + 'px';
-        box.style.width = r.width + 'px';
-        box.style.display = 'block';
-        box.querySelectorAll('.addr-suggest-item').forEach(el => {
-            el.addEventListener('mousedown', ev => {   // mousedown — успеть до blur
-                ev.preventDefault();
-                t.value = box._items[+el.dataset.i].text;
-                box.style.display = 'none';
-            });
-        });
-    }, 300);
-});
-document.addEventListener('click', e => {
-    const box = document.getElementById('addrSuggestBox');
-    if (box && !e.target.closest('.addr-suggest') && !e.target.closest('#addrSuggestBox')) box.style.display = 'none';
+    if (!window.YANDEX_SUGGEST_KEY || addrSuggestAttached.has(t)) return;
+    if (!t.id) t.id = 'addr_' + Math.random().toString(36).slice(2);
+    addrSuggestAttached.add(t);
+    try {
+        await loadYandexMaps();
+        // eslint-disable-next-line no-undef
+        new ymaps.SuggestView(t.id, { results: 7 });
+    } catch (err) {
+        addrSuggestAttached.delete(t);   // не вышло — поле остаётся обычным текстом
+    }
 });
 document.getElementById('productSearch').addEventListener('input', renderProductCatalog);
 // Массовый выбор в каталоге продукции

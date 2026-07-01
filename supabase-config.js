@@ -8,4 +8,4 @@ window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXB
 // Бесплатный, безопасен для браузера (ограничивается по домену в кабинете Яндекса).
 // Получить: https://developer.tech.yandex.ru → «API Геосаджеста» (JavaScript API и HTTP Геокодер).
 // Пока пусто — поле адреса работает как обычный текст, без подсказок.
-window.YANDEX_SUGGEST_KEY = 'dda3ddba-c9ea-4ead-9010-f43fbc15c6e3';
+window.YANDEX_SUGGEST_KEY = 'f53ac585-9ff0-4942-b509-daf50ed65566';
