@@ -683,12 +683,25 @@ ymaps[class*="__suggest"], [class*="ymaps"][class*="__suggest"] { z-index: 10000
 .order-status-select {
     font-size: 12px; font-weight: 600; padding: 4px 6px;
     border: 1px solid transparent; border-radius: 999px;
-    width: 108px; cursor: pointer; -webkit-appearance: none; appearance: none;
+    width: 100%; cursor: pointer; -webkit-appearance: none; appearance: none;
     background-image: none; text-overflow: ellipsis;
 }
 .order-status-select:hover { border-color: rgba(0,0,0,.12); }
-/* Заказы: компактнее отступы — больше колонок влезает без скролла */
-#ordersTable th, #ordersTable td { padding-left: 10px; padding-right: 10px; }
+
+/* Заказы: фиксированная раскладка — всё влезает, телефон не переносится */
+#ordersTable { table-layout: fixed; }
+#ordersTable th, #ordersTable td { padding-left: 9px; padding-right: 9px; }
+#ordersTable th:nth-child(1),  #ordersTable td:nth-child(1)  { width: 80px;  white-space: nowrap; }   /* Дата */
+#ordersTable th:nth-child(2),  #ordersTable td:nth-child(2)  { width: 94px;  word-break: break-word; } /* № заказа */
+#ordersTable th:nth-child(3),  #ordersTable td:nth-child(3)  { width: 90px;  word-break: break-word; } /* Поставщик */
+#ordersTable th:nth-child(4),  #ordersTable td:nth-child(4)  { width: 82px; }   /* Закупка */
+#ordersTable th:nth-child(5),  #ordersTable td:nth-child(5)  { width: 82px; }   /* Продажа */
+#ordersTable th:nth-child(6),  #ordersTable td:nth-child(6)  { width: 84px; }   /* Получено */
+#ordersTable th:nth-child(7),  #ordersTable td:nth-child(7)  { width: 84px; }   /* Осталось */
+#ordersTable th:nth-child(8),  #ordersTable td:nth-child(8)  { width: 104px; }  /* Статус */
+#ordersTable td:nth-child(9)   { word-break: break-word; }                      /* Клиент (остаток) */
+#ordersTable th:nth-child(10), #ordersTable td:nth-child(10) { width: 132px; white-space: nowrap; }   /* Телефон */
+#ordersTable th:nth-child(11), #ordersTable td:nth-child(11) { width: 76px; }   /* Открыть */
 
 .badge-income  { background: var(--green-100); color: var(--green-700); }
 .badge-expense { background: var(--red-100);   color: var(--red-600); }
