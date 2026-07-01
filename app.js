@@ -320,11 +320,110 @@ function isJunkProductName(name) {
     if (!words.length) return true;
     return words.every(w => PRODUCT_NOISE_WORDS.has(w));
 }
-// Список названий продукции для автодополнения — без служебного шлака
+// Названия, вручную скрытые владельцем (мусор, который не поймал фильтр).
+// Загружаются из таблицы product_hidden; ключ — само название.
+let hiddenProducts = new Set();
+
+// Список названий продукции для автодополнения — без служебного шлака и скрытых
 function getProductNameSuggestions() {
     const names = [...new Set(orders.flatMap(o => o.items.map(i => i.product_name)).filter(Boolean))];
-    return names.filter(n => !isJunkProductName(n)).slice(0, 500);
+    return names.filter(n => !isJunkProductName(n) && !hiddenProducts.has(n)).slice(0, 500);
 }
+
+// ─── Каталог продукции (раздел «Продукция») ──────────────────
+// Категоризация по ключевым словам (для окон/дверей/стройматериалов)
+const PRODUCT_CATEGORIES = [
+    ['Утеплитель',   /вата|утеплит|минват|ветонит|роквул|карбон|пенопласт|изовер|тепло|пеноплэкс|пеноплекс|базальт/i],
+    ['Плиты/ОСБ',    /осб|осп|осб9|осб12|фанер|изоплат|поликарбонат|дсп|двп|гипсокартон|гкл|цсп|лдсп|ламинат/i],
+    ['Крепёж',       /саморез|гвозд|дюбел|анкер|шуруп|шпильк|гайк|шайб|крепеж|креплен|пластин|подвес|хомут|скоб|болт/i],
+    ['Изоляция/плёнки', /изоспан|ондутис|геотекстил|мембран|пароизол|гидроизол|скотч|лент|плёнк|пленк|стеклоизол|битум|рубероид|паро/i],
+    ['Кровля',       /профлист|металлочереп|черепиц|ондулин|шифер|конек|конёк|ендов|снежик|снегозад|капельник|отлив|водосток|профнастил|штиль/i],
+    ['Окна/двери',   /окн|двер|форточк|подоконник|откос|штапик|ручк|петл|замок|фурнитур|м\/с|москит|сетк|штульп|полотн|короб|наличник|добор|стеклопакет|уплотнит|защёлк|защелк|завертк|доводчик/i],
+    ['Пена/герметик', /пена|герметик|стиз|клей|монтажн|силикон/i],
+    ['Сваи/фундамент', /свая|сваи|оголовок|огол|цемент|керамзит|кольц|септик|фундамент|бетон|песок|щебен/i],
+    ['Профиль/металл', /профил|труб|столб|лаг|уголок|уголк|металл|штакетник|арматур|проф\s*труб/i],
+    ['Услуги/прочее', /доставк|монтаж|замер|подъем|подъём|рассрочк/i],
+];
+function productCategory(name) {
+    const n = (name || '').toLowerCase();
+    for (const [label, re] of PRODUCT_CATEGORIES) if (re.test(n)) return label;
+    return 'Разное';
+}
+
+window.productCat = window.productCat || 'all';   // фильтр по категории
+
+function renderProductCatalog() {
+    // все реальные названия (без авто-мусора и без уже скрытых) + счётчик использований
+    const useCount = {};
+    orders.forEach(o => o.items.forEach(i => {
+        const nm = i.product_name;
+        if (nm) useCount[nm] = (useCount[nm] || 0) + 1;
+    }));
+    let names = Object.keys(useCount).filter(n => !isJunkProductName(n) && !hiddenProducts.has(n));
+
+    // категория для каждого
+    const withCat = names.map(n => ({ name: n, cat: productCategory(n), count: useCount[n] }));
+
+    // Метрики
+    document.getElementById('productsMetrics').innerHTML = `
+        <div class="metric-card blue">
+            <div class="metric-label">Всего названий</div>
+            <div class="metric-value">${withCat.length}</div>
+        </div>
+        <div class="metric-card cyan">
+            <div class="metric-label">Категорий</div>
+            <div class="metric-value">${new Set(withCat.map(x => x.cat)).size}</div>
+        </div>
+        <div class="metric-card amber">
+            <div class="metric-label">Скрыто вручную</div>
+            <div class="metric-value">${hiddenProducts.size}</div>
+        </div>
+    `;
+
+    // Лента категорий
+    const catCounts = {};
+    withCat.forEach(x => { catCounts[x.cat] = (catCounts[x.cat] || 0) + 1; });
+    const cats = Object.keys(catCounts).sort((a, b) => catCounts[b] - catCounts[a]);
+    const tab = (val, label, cnt) =>
+        `<button class="month-tab ${window.productCat === val ? 'active' : ''}" data-cat="${val}">
+            ${label}${cnt != null ? ` <span class="month-count">${cnt}</span>` : ''}</button>`;
+    let tabsHtml = tab('all', 'Все', withCat.length);
+    cats.forEach(c => { tabsHtml += tab(c, c, catCounts[c]); });
+    const catBox = document.getElementById('productCats');
+    catBox.innerHTML = tabsHtml;
+    catBox.querySelectorAll('.month-tab').forEach(btn => {
+        btn.addEventListener('click', () => { window.productCat = btn.dataset.cat; renderProductCatalog(); });
+    });
+
+    // Фильтр по категории и поиску
+    const q = (document.getElementById('productSearch').value || '').trim().toLowerCase();
+    let rows = withCat;
+    if (window.productCat !== 'all') rows = rows.filter(x => x.cat === window.productCat);
+    if (q) rows = rows.filter(x => x.name.toLowerCase().includes(q));
+    rows.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+    document.getElementById('productCatalogBody').innerHTML = rows.length ? rows.map(x => `
+        <tr>
+            <td data-label="Название">${x.name.replace(/</g, '&lt;')}</td>
+            <td data-label="Категория"><span class="cat-badge">${x.cat}</span></td>
+            <td class="font-mono" data-label="В заказах">${x.count}</td>
+            <td data-label="" class="row-actions">
+                <button class="btn btn-sm btn-danger" title="Убрать из подсказок"
+                    onclick="hideProductName(this.dataset.n)" data-n="${x.name.replace(/"/g, '&quot;')}">− Удалить</button>
+            </td>
+        </tr>`).join('') : '<tr><td colspan="4" class="empty-state">Ничего не найдено</td></tr>';
+}
+
+// Скрыть название из подсказок (не трогая исторические заказы)
+window.hideProductName = async function(name) {
+    if (!name) return;
+    if (!confirm(`Убрать «${name}» из списка продукции?\n\nНазвание перестанет предлагаться при создании заказа. Сами заказы не меняются.`)) return;
+    hiddenProducts.add(name);
+    renderProductCatalog();
+    const { error } = await SB.from('product_hidden').upsert({ name }, { onConflict: 'name' });
+    if (error) { dbErr('скрытие товара', error); hiddenProducts.delete(name); renderProductCatalog(); return; }
+    dbToast('Название убрано из подсказок', true);
+};
 
 // Статусы заказа от производства (присылаются в письмах)
 const PRODUCTION_STATUS_LABELS = {
@@ -414,6 +513,7 @@ function renderSection(id) {
         case 'suppliers':  renderSuppliers(); break;
         case 'finances':   renderFinances(); break;
         case 'warehouse':  renderWarehouse(); break;
+        case 'products':   renderProductCatalog(); break;
     }
 }
 
@@ -2079,6 +2179,7 @@ window.saveNewOrder = function() {
 
 document.getElementById('btnNewOrder2').addEventListener('click', openNewOrderForm);
 document.getElementById('btnNewSupplier').addEventListener('click', () => openSupplierForm());
+document.getElementById('productSearch').addEventListener('input', renderProductCatalog);
 
 // ─── Уведомления ─────────────────────────────────────────────
 // Единый центр: статусы производства, ближайшие/просроченные доставки, новые
@@ -2323,6 +2424,11 @@ async function loadData() {
         clients = c;
         suppliers = s;
         transactions = t.map(x => ({ ...x, amount: +x.amount }));
+        // Скрытые вручную названия продукции (для чистки подсказок)
+        try {
+            const { data: hp } = await SB.from('product_hidden').select('name');
+            hiddenProducts = new Set((hp || []).map(r => r.name));
+        } catch (e) { hiddenProducts = new Set(); }
         // Разворачиваем вложенные order_items в o.items (с приведением чисел)
         orders = ordRaw.map(o => {
             const items = (o.order_items || []).map(i => ({

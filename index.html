@@ -6,7 +6,7 @@
     <title>Центр окон и дверей — CRM</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=29">
+    <link rel="stylesheet" href="style.css?v=30">
 </head>
 <body>
 
@@ -67,6 +67,10 @@
         <a href="#" class="nav-item" data-section="finances">
             <span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="13.5" rx="2.5"/><path d="M2.5 10h19"/><circle cx="16.5" cy="14.5" r="1.3"/></svg></span>
             <span class="nav-label">Финансы</span>
+        </a>
+        <a href="#" class="nav-item" data-section="products">
+            <span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="19" cy="17" r="2.2"/></svg></span>
+            <span class="nav-label">Продукция</span>
         </a>
         <a href="#" class="nav-item" data-section="warehouse">
             <span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.8L12 3l9 4.8v8.4L12 21l-9-4.8z"/><path d="M3 7.8l9 4.8 9-4.8M12 12.6V21"/></svg></span>
@@ -321,6 +325,30 @@
             </div>
         </section>
 
+        <!-- ─── Products catalog ─── -->
+        <section class="section" id="section-products">
+            <h1 class="section-title">Продукция</h1>
+            <p class="text-muted" style="margin:-12px 0 16px">Список названий товаров из заказов. Кнопка «−» убирает мусорное название из подсказок при создании заказа (сами заказы не меняются).</p>
+            <div class="metrics-grid" id="productsMetrics"></div>
+            <div class="search-box" style="max-width:none;margin:16px 0 12px">
+                <input type="text" id="productSearch" placeholder="Поиск по названию…" autocomplete="off">
+            </div>
+            <div class="month-tabs" id="productCats"></div>
+            <div class="table-wrapper">
+                <table class="data-table" id="productsTable">
+                    <thead>
+                        <tr>
+                            <th>Название</th>
+                            <th>Категория</th>
+                            <th>В заказах</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="productCatalogBody"></tbody>
+                </table>
+            </div>
+        </section>
+
         <!-- ─── Warehouse ─── -->
         <section class="section" id="section-warehouse">
             <div class="section-header">
@@ -366,7 +394,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=29"></script>
-<script src="app.js?v=29"></script>
+<script src="supabase-config.js?v=30"></script>
+<script src="app.js?v=30"></script>
 </body>
 </html>
