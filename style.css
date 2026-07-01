@@ -338,6 +338,16 @@ body.modal-open { overflow: hidden; }
 .notif-sub { font-size: 12px; color: var(--slate-500); }
 .notif-empty { padding: 28px 20px; text-align: center; color: var(--slate-400); font-size: 13px; line-height: 1.6; }
 
+/* Панель массового действия (каталог продукции) */
+.bulk-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; margin-bottom: 12px;
+    background: #eff6ff; border: 1px solid var(--blue-200, #bfdbfe);
+    border-radius: 12px;
+}
+.bulk-count { font-weight: 600; color: var(--slate-700); margin-right: auto; }
+.prod-check { width: 17px; height: 17px; cursor: pointer; accent-color: var(--blue-600); }
+
 /* Бейдж категории в каталоге продукции */
 .cat-badge {
     display: inline-block; padding: 2px 10px; border-radius: 999px;

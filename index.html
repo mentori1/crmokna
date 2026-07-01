@@ -6,7 +6,7 @@
     <title>Центр окон и дверей — CRM</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=30">
+    <link rel="stylesheet" href="style.css?v=31">
 </head>
 <body>
 
@@ -334,10 +334,16 @@
                 <input type="text" id="productSearch" placeholder="Поиск по названию…" autocomplete="off">
             </div>
             <div class="month-tabs" id="productCats"></div>
+            <div class="bulk-bar" id="productBulkBar" style="display:none">
+                <span class="bulk-count" id="productBulkCount">Выбрано: 0</span>
+                <button class="btn btn-sm btn-danger" id="productBulkDelete">− Удалить выбранные</button>
+                <button class="btn btn-sm btn-outline" id="productBulkClear">Снять выделение</button>
+            </div>
             <div class="table-wrapper">
                 <table class="data-table" id="productsTable">
                     <thead>
                         <tr>
+                            <th style="width:38px"><input type="checkbox" id="productSelectAll" title="Выбрать все на странице"></th>
                             <th>Название</th>
                             <th>Категория</th>
                             <th>В заказах</th>
@@ -394,7 +400,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=30"></script>
-<script src="app.js?v=30"></script>
+<script src="supabase-config.js?v=31"></script>
+<script src="app.js?v=31"></script>
 </body>
 </html>

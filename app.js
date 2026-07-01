@@ -351,6 +351,22 @@ function productCategory(name) {
 }
 
 window.productCat = window.productCat || 'all';   // фильтр по категории
+window.productSelected = window.productSelected || new Set();   // отмеченные галочками
+
+// Обновить панель массового действия (показать/скрыть, счётчик)
+function updateProductBulkBar() {
+    const bar = document.getElementById('productBulkBar');
+    const cnt = document.getElementById('productBulkCount');
+    if (!bar) return;
+    const n = window.productSelected.size;
+    bar.style.display = n ? 'flex' : 'none';
+    if (cnt) cnt.textContent = `Выбрано: ${n}`;
+    const all = document.getElementById('productSelectAll');
+    if (all) {
+        const boxes = [...document.querySelectorAll('.prod-check')];
+        all.checked = boxes.length > 0 && boxes.every(b => b.checked);
+    }
+}
 
 function renderProductCatalog() {
     // все реальные названия (без авто-мусора и без уже скрытых) + счётчик использований
@@ -402,16 +418,29 @@ function renderProductCatalog() {
     if (q) rows = rows.filter(x => x.name.toLowerCase().includes(q));
     rows.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
-    document.getElementById('productCatalogBody').innerHTML = rows.length ? rows.map(x => `
+    document.getElementById('productCatalogBody').innerHTML = rows.length ? rows.map(x => {
+        const nAttr = x.name.replace(/"/g, '&quot;');
+        return `
         <tr>
+            <td data-label=""><input type="checkbox" class="prod-check" data-n="${nAttr}" ${window.productSelected.has(x.name) ? 'checked' : ''}></td>
             <td data-label="Название">${x.name.replace(/</g, '&lt;')}</td>
             <td data-label="Категория"><span class="cat-badge">${x.cat}</span></td>
             <td class="font-mono" data-label="В заказах">${x.count}</td>
             <td data-label="" class="row-actions">
                 <button class="btn btn-sm btn-danger" title="Убрать из подсказок"
-                    onclick="hideProductName(this.dataset.n)" data-n="${x.name.replace(/"/g, '&quot;')}">− Удалить</button>
+                    onclick="hideProductName(this.dataset.n)" data-n="${nAttr}">− Удалить</button>
             </td>
-        </tr>`).join('') : '<tr><td colspan="4" class="empty-state">Ничего не найдено</td></tr>';
+        </tr>`; }).join('') : '<tr><td colspan="5" class="empty-state">Ничего не найдено</td></tr>';
+
+    // Чекбоксы строк → обновляем набор выбранных
+    document.querySelectorAll('#productCatalogBody .prod-check').forEach(box => {
+        box.addEventListener('change', () => {
+            const nm = box.dataset.n;
+            if (box.checked) window.productSelected.add(nm); else window.productSelected.delete(nm);
+            updateProductBulkBar();
+        });
+    });
+    updateProductBulkBar();
 }
 
 // Скрыть название из подсказок (не трогая исторические заказы)
@@ -423,6 +452,18 @@ window.hideProductName = async function(name) {
     const { error } = await SB.from('product_hidden').upsert({ name }, { onConflict: 'name' });
     if (error) { dbErr('скрытие товара', error); hiddenProducts.delete(name); renderProductCatalog(); return; }
     dbToast('Название убрано из подсказок', true);
+};
+
+// Массовое скрытие выбранных галочками названий
+window.hideProductNames = async function(names) {
+    if (!names || !names.length) return;
+    if (!confirm(`Убрать ${names.length} назв. из списка продукции?\n\nОни перестанут предлагаться при создании заказа. Сами заказы НЕ меняются.`)) return;
+    names.forEach(n => hiddenProducts.add(n));
+    window.productSelected.clear();
+    renderProductCatalog();
+    const { error } = await SB.from('product_hidden').upsert(names.map(name => ({ name })), { onConflict: 'name' });
+    if (error) { dbErr('скрытие товаров', error); names.forEach(n => hiddenProducts.delete(n)); renderProductCatalog(); return; }
+    dbToast(`Убрано названий: ${names.length}`, true);
 };
 
 // Статусы заказа от производства (присылаются в письмах)
@@ -2180,6 +2221,17 @@ window.saveNewOrder = function() {
 document.getElementById('btnNewOrder2').addEventListener('click', openNewOrderForm);
 document.getElementById('btnNewSupplier').addEventListener('click', () => openSupplierForm());
 document.getElementById('productSearch').addEventListener('input', renderProductCatalog);
+// Массовый выбор в каталоге продукции
+document.getElementById('productSelectAll').addEventListener('change', e => {
+    const on = e.target.checked;
+    document.querySelectorAll('#productCatalogBody .prod-check').forEach(box => {
+        box.checked = on;
+        if (on) window.productSelected.add(box.dataset.n); else window.productSelected.delete(box.dataset.n);
+    });
+    updateProductBulkBar();
+});
+document.getElementById('productBulkDelete').addEventListener('click', () => hideProductNames([...window.productSelected]));
+document.getElementById('productBulkClear').addEventListener('click', () => { window.productSelected.clear(); renderProductCatalog(); });
 
 // ─── Уведомления ─────────────────────────────────────────────
 // Единый центр: статусы производства, ближайшие/просроченные доставки, новые
