@@ -1583,12 +1583,15 @@ window.openClientEditForm = function(clientId) {
 window.saveClientEdit = function(clientId) {
     const cl = clients.find(x => x.id === clientId);
     if (!cl) return;
+    const addrEl = document.getElementById('editCliAddress');
     const patch = {
         name: document.getElementById('editCliName').value.trim(),
         phone: document.getElementById('editCliPhone').value.trim(),
         email: document.getElementById('editCliEmail').value.trim(),
-        address: document.getElementById('editCliAddress').value.trim(),
+        address: addrEl.value.trim(),
     };
+    const ad = addrDataFrom(addrEl);
+    if (ad) patch.address_data = ad;      // структура из DaData (если выбрали из подсказок)
     Object.assign(cl, patch);
     sbUpdateClient(cl, patch);
     openClientDetail(cl.id);
@@ -1627,7 +1630,8 @@ window.openNewClientForm = function() {
 window.saveNewClient = function() {
     const name = document.getElementById('newCliName').value.trim();
     const phone = document.getElementById('newCliPhone').value.trim();
-    const address = document.getElementById('newCliAddress').value.trim();
+    const addrEl = document.getElementById('newCliAddress');
+    const address = addrEl.value.trim();
     const email = document.getElementById('newCliEmail').value.trim();
     if (!name && !phone && !address) { alert('Укажите хотя бы имя, телефон или адрес'); return; }
     // если такой телефон уже есть — не плодим дубль
@@ -1637,6 +1641,7 @@ window.saveNewClient = function() {
         closeModal(); openClientDetail(existing.id); return;
     }
     const row = { id: nextLocalId(clients), name, phone, email, address,
+                  address_data: addrDataFrom(addrEl),
                   created_at: new Date().toISOString().slice(0, 10) };
     clients.push(row);
     sbInsertClient(row);
@@ -2397,7 +2402,7 @@ function findClientByPhone(phone) {
 }
 
 // Найти существующего клиента (сначала по телефону, затем по имени) или создать
-function findOrCreateClient(name, phone, address) {
+function findOrCreateClient(name, phone, address, addressData) {
     // Приоритет — телефон: имя может отличаться (Женя/Евгений/Евгеша), номер один
     let cl = findClientByPhone(phone);
     if (!cl) {
@@ -2409,12 +2414,13 @@ function findOrCreateClient(name, phone, address) {
         const patch = {};
         if (phone && !cl.phone) patch.phone = phone;
         if (address && !cl.address) patch.address = address;
+        if (addressData && !cl.address_data) patch.address_data = addressData;
         if (Object.keys(patch).length) { Object.assign(cl, patch); sbUpdateClient(cl, patch); }
         return cl.id;
     }
     const newId = clients.length ? Math.max(...clients.map(c => c.id)) + 1 : 1;
     const row = { id: newId, name: name.trim(), phone: phone || '', email: '', address: address || '',
-                  created_at: new Date().toISOString().slice(0, 10) };
+                  address_data: addressData || null, created_at: new Date().toISOString().slice(0, 10) };
     clients.push(row);
     sbInsertClient(row);            // сохраняем нового клиента в Supabase
     return newId;
@@ -2455,8 +2461,9 @@ window.saveNewOrder = function() {
     });
     if (!items.length) { alert('Добавьте хотя бы одну позицию продукции'); return; }
 
-    const clientAddress = document.getElementById('formDeliveryAddr').value.trim();
-    const clientId = findOrCreateClient(clientName, clientPhone, clientAddress);
+    const addrEl = document.getElementById('formDeliveryAddr');
+    const clientAddress = addrEl.value.trim();
+    const clientId = findOrCreateClient(clientName, clientPhone, clientAddress, addrDataFrom(addrEl));
     const newId = orders.length ? Math.max(...orders.map(o => o.id)) + 1 : 1;
     const deliveryDate = document.getElementById('formDeliveryDate').value || null;
 
@@ -2490,40 +2497,85 @@ document.getElementById('ordersMonthsToggle').addEventListener('click', () => {
     applyOrdersMonthsState();
 });
 
-// ─── Подсказки адреса (Яндекс.Карты, SuggestView) ────────────
-// Официальный браузерный способ: подгружаем JS-API Яндекса и вешаем SuggestView
-// на поля с классом .addr-suggest (адрес в заказе/клиенте). Обходит CORS и
-// авторизуется ключом. Без ключа (window.YANDEX_SUGGEST_KEY) — обычный текст.
-let ymapsLoadPromise = null;
-function loadYandexMaps() {
-    if (window.ymaps && window.ymaps.SuggestView) return Promise.resolve();
-    if (ymapsLoadPromise) return ymapsLoadPromise;
-    const key = window.YANDEX_SUGGEST_KEY;
-    if (!key) return Promise.reject(new Error('no key'));
-    ymapsLoadPromise = new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = `https://api-maps.yandex.ru/2.1/?apikey=${key}&lang=ru_RU&load=SuggestView`;
-        s.onload = () => window.ymaps.ready(resolve);
-        s.onerror = () => reject(new Error('yandex maps script failed'));
-        document.head.appendChild(s);
-    });
-    return ymapsLoadPromise;
+// ─── Подсказки адреса (DaData Suggestions) ───────────────────
+// Работает на полях .addr-suggest (адрес в заказе/клиенте). REST API из браузера
+// (CORS ок, привязки к домену нет). Токен — window.DADATA_TOKEN (бесплатный, из
+// кабинета dadata.ru). Без токена поле — обычный текст. При выборе в input._dadata
+// сохраняется структура (регион/город/улица/дом/индекс/координаты).
+let addrDadataTimer = null;
+function addrSuggestBox() {
+    let box = document.getElementById('addrSuggestBox');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'addrSuggestBox'; box.className = 'addr-suggest-box';
+        document.body.appendChild(box);
+    }
+    return box;
 }
-const addrSuggestAttached = new WeakSet();
-document.addEventListener('focusin', async e => {
+async function fetchDadataAddress(query) {
+    const token = window.DADATA_TOKEN;
+    if (!token) return [];
+    try {
+        const r = await fetch('https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json', 'Accept': 'application/json',
+                'Authorization': 'Token ' + token,
+            },
+            body: JSON.stringify({ query, count: 7 }),
+        });
+        if (!r.ok) return [];
+        const d = await r.json();
+        return d.suggestions || [];   // [{ value, unrestricted_value, data:{...} }]
+    } catch (e) { return []; }
+}
+document.addEventListener('input', e => {
     const t = e.target;
     if (!t.classList || !t.classList.contains('addr-suggest')) return;
-    if (!window.YANDEX_SUGGEST_KEY || addrSuggestAttached.has(t)) return;
-    if (!t.id) t.id = 'addr_' + Math.random().toString(36).slice(2);
-    addrSuggestAttached.add(t);
-    try {
-        await loadYandexMaps();
-        // eslint-disable-next-line no-undef
-        new ymaps.SuggestView(t.id, { results: 7 });
-    } catch (err) {
-        addrSuggestAttached.delete(t);   // не вышло — поле остаётся обычным текстом
-    }
+    t._dadata = null;                     // изменили руками — сбрасываем привязку структуры
+    const box = addrSuggestBox();
+    clearTimeout(addrDadataTimer);
+    const q = t.value.trim();
+    if (!window.DADATA_TOKEN || q.length < 3) { box.style.display = 'none'; return; }
+    addrDadataTimer = setTimeout(async () => {              // debounce 300 мс
+        const items = await fetchDadataAddress(q);
+        if (!items.length || document.activeElement !== t) { box.style.display = 'none'; return; }
+        box.innerHTML = items.map((it, i) =>
+            `<div class="addr-suggest-item" data-i="${i}">${(it.value || '').replace(/</g, '&lt;')}</div>`).join('');
+        box._items = items; box._input = t;
+        const r = t.getBoundingClientRect();
+        box.style.left = r.left + 'px'; box.style.top = (r.bottom + 2) + 'px'; box.style.width = r.width + 'px';
+        box.style.display = 'block';
+        box.querySelectorAll('.addr-suggest-item').forEach(el => {
+            el.addEventListener('mousedown', ev => {   // mousedown — успеть до blur
+                ev.preventDefault();
+                const s = box._items[+el.dataset.i];
+                t.value = s.value;
+                t._dadata = s.data || null;   // структура: регион/город/улица/дом/индекс/гео
+                box.style.display = 'none';
+            });
+        });
+    }, 300);
 });
+document.addEventListener('click', e => {
+    const box = document.getElementById('addrSuggestBox');
+    if (box && !e.target.closest('.addr-suggest') && !e.target.closest('#addrSuggestBox')) box.style.display = 'none';
+});
+// Компактная структура адреса из ответа DaData (для хранения в address_data)
+function addrDataFrom(input) {
+    const d = input && input._dadata;
+    if (!d) return null;
+    return {
+        region: d.region_with_type || d.region || null,
+        city: d.city_with_type || d.settlement_with_type || d.city || null,
+        street: d.street_with_type || null,
+        house: d.house || null,
+        flat: d.flat || null,
+        postal_code: d.postal_code || null,
+        geo_lat: d.geo_lat || null, geo_lon: d.geo_lon || null,
+        fias_id: d.fias_id || null,
+    };
+}
 document.getElementById('productSearch').addEventListener('input', renderProductCatalog);
 // Массовый выбор в каталоге продукции
 document.getElementById('productSelectAll').addEventListener('change', e => {

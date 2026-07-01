@@ -408,10 +408,7 @@ body.modal-open { overflow: hidden; }
 .bulk-count { font-weight: 600; color: var(--slate-700); margin-right: auto; }
 .prod-check { width: 17px; height: 17px; cursor: pointer; accent-color: var(--blue-600); }
 
-/* Выпадашка подсказок Яндекс SuggestView — поверх модального окна (z-index 200) */
-ymaps[class*="__suggest"], [class*="ymaps"][class*="__suggest"] { z-index: 100000 !important; }
-
-/* (legacy) кастомная выпадашка подсказок адреса */
+/* Выпадашка подсказок адреса (DaData) — поверх модального окна */
 .addr-suggest-box {
     display: none; position: fixed; z-index: 1000;
     background: #fff; border: 1px solid var(--slate-200);
