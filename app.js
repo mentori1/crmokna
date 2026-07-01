@@ -222,15 +222,26 @@ async function sbDeleteOrder(o) {
 }
 
 
+// Пайплайн статуса заказа (в порядке жизненного цикла)
 const STATUS_LABELS = {
-    new:                     'Новый',
-    in_progress:             'В работе',
-    ordered_from_supplier:   'Заказан у поставщика',
-    received_at_warehouse:   'Получен на склад',
-    delivering:              'Доставляется',
-    delivered:               'Доставлен',
-    closed:                  'Закрыт'
+    new:                'Новый',
+    request_sent:       'Заявка отправлена',
+    reply_received:     'Ответ получен',
+    awaiting_shipment:  'Ждёт отгрузки',
+    shipped:            'Отгружен',
+    to_warehouse:       'Доставка на склад',
+    to_client:          'Доставка клиенту',
+    delivered:          'Доставлен',
+    closed:             'Закрыт',
 };
+// Старые значения статусов (в исторических заказах) — чтобы корректно отображались
+const STATUS_COMPAT = {
+    in_progress:           'В работе',
+    ordered_from_supplier: 'Заказан у поставщика',
+    received_at_warehouse: 'Получен на склад',
+    delivering:            'Доставляется',
+};
+const statusLabel = s => STATUS_LABELS[s] || STATUS_COMPAT[s] || s || '—';
 
 // Статусы доставки (раздел «Доставка»)
 const DELIVERY_STATUS_LABELS = {
@@ -706,7 +717,7 @@ function renderDashboard() {
                     <td class="td-bold">${o.order_number}</td>
                     <td>${clientName(o.client_id)}</td>
                     <td class="font-mono">${fmtCur(c.totalSale)}</td>
-                    <td><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></td>
+                    <td><span class="badge badge-${o.status}">${statusLabel(o.status)}</span></td>
                 </tr>`;
             }).join('')}</tbody>
         </table>`;
@@ -727,7 +738,7 @@ function renderDashboard() {
                     <td class="td-bold">${fmtDate(o.delivery_date)}</td>
                     <td>${o.order_number}</td>
                     <td>${clientName(o.client_id)}</td>
-                    <td><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></td>
+                    <td><span class="badge badge-${o.status}">${statusLabel(o.status)}</span></td>
                 </tr>`).join('')}</tbody>
         </table>` : '<div class="empty-state">Нет запланированных доставок</div>';
 
@@ -778,23 +789,27 @@ function renderCharts() {
         }
     });
 
+    // Считаем по фактически встречающимся статусам (новые + старые)
     const statusCounts = {};
-    Object.keys(STATUS_LABELS).forEach(s => statusCounts[s] = 0);
-    orders.forEach(o => statusCounts[o.status]++);
+    orders.forEach(o => { const s = o.status || 'new'; statusCounts[s] = (statusCounts[s] || 0) + 1; });
     const statusColors = {
-        new: '#3b82f6', in_progress: '#f59e0b', ordered_from_supplier: '#a855f7',
-        received_at_warehouse: '#06b6d4', delivering: '#f97316', delivered: '#22c55e', closed: '#94a3b8'
+        new: '#3b82f6', request_sent: '#6366f1', reply_received: '#06b6d4',
+        awaiting_shipment: '#f59e0b', shipped: '#a855f7', to_warehouse: '#0ea5e9',
+        to_client: '#f97316', delivered: '#22c55e', closed: '#94a3b8',
+        in_progress: '#f59e0b', ordered_from_supplier: '#a855f7',
+        received_at_warehouse: '#06b6d4', delivering: '#f97316',
     };
+    const statusKeys = Object.keys(statusCounts).filter(s => statusCounts[s] > 0);
 
     if (statusChart) statusChart.destroy();
     const ctx2 = document.getElementById('statusChart').getContext('2d');
     statusChart = new Chart(ctx2, {
         type: 'doughnut',
         data: {
-            labels: Object.values(STATUS_LABELS),
+            labels: statusKeys.map(statusLabel),
             datasets: [{
-                data: Object.values(statusCounts),
-                backgroundColor: Object.keys(STATUS_LABELS).map(s => statusColors[s]),
+                data: statusKeys.map(s => statusCounts[s]),
+                backgroundColor: statusKeys.map(s => statusColors[s] || '#cbd5e1'),
                 borderWidth: 0, spacing: 2
             }]
         },
@@ -816,30 +831,49 @@ const ORDERS_PER_PAGE = 50;
 const MONTH_NAMES_FULL = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
 window.ordersMonth = window.ordersMonth || 'all';  // 'all' или 'YYYY-MM'
 
-// Лента месяцев над таблицей заказов
+// Список месяцев сбоку от таблицы заказов (вертикально, по годам, сворачивается)
+window.ordersMonthsOpen = (localStorage.getItem('orders_months_open') === '1');
+function applyOrdersMonthsState() {
+    const layout = document.getElementById('ordersLayout');
+    const toggle = document.getElementById('ordersMonthsToggle');
+    if (!layout) return;
+    layout.classList.toggle('months-collapsed', !window.ordersMonthsOpen);
+    if (toggle) {
+        const cur = window.ordersMonth === 'all' ? 'Все' : (() => {
+            const [y, mo] = (window.ordersMonth || '').split('-');
+            return y ? `${MONTH_NAMES_FULL[+mo - 1]} ${y.slice(2)}` : 'Все';
+        })();
+        toggle.textContent = window.ordersMonthsOpen ? '📅 Скрыть месяцы' : `📅 Месяцы: ${cur}`;
+    }
+}
 function renderMonthTabs() {
     const box = document.getElementById('orderMonths');
     if (!box) return;
-    const months = [...new Set(orders.map(o => (o.created_at || '').slice(0, 7)).filter(Boolean))]
-        .sort().reverse();  // новые слева
-    const tab = (val, label, count) =>
-        `<button class="month-tab ${window.ordersMonth === val ? 'active' : ''}" data-month="${val}">
-            ${label}${count != null ? ` <span class="month-count">${count}</span>` : ''}
-        </button>`;
-    let html = tab('all', 'Все', orders.length);
-    months.forEach(m => {
-        const [y, mo] = m.split('-');
-        const cnt = orders.filter(o => (o.created_at || '').startsWith(m)).length;
-        html += tab(m, `${MONTH_NAMES_FULL[+mo - 1]} ${y.slice(2)}`, cnt);
+    const months = [...new Set(orders.map(o => (o.created_at || '').slice(0, 7)).filter(Boolean))].sort().reverse();
+    const item = (val, label, count) =>
+        `<button class="cat-item ${window.ordersMonth === val ? 'active' : ''}" data-month="${val}">
+            <span class="cat-item-label">${label}</span><span class="cat-item-count">${count}</span></button>`;
+    let html = item('all', 'Все', orders.length);
+    const byYear = {};
+    months.forEach(m => { const y = m.slice(0, 4); (byYear[y] = byYear[y] || []).push(m); });
+    Object.keys(byYear).sort().reverse().forEach(y => {
+        const cntY = orders.filter(o => (o.created_at || '').startsWith(y)).length;
+        html += `<div class="fin-year-head"><span>${y}</span><b>${cntY}</b></div>`;
+        byYear[y].forEach(m => {
+            const mo = +m.slice(5, 7);
+            const cnt = orders.filter(o => (o.created_at || '').startsWith(m)).length;
+            html += item(m, MONTH_NAMES_FULL[mo - 1], cnt);
+        });
     });
     box.innerHTML = html;
-    box.querySelectorAll('.month-tab').forEach(btn => {
+    box.querySelectorAll('.cat-item').forEach(btn => {
         btn.addEventListener('click', () => {
             window.ordersMonth = btn.dataset.month;
             window.ordersPage = 1;
             renderOrders();
         });
     });
+    applyOrdersMonthsState();
 }
 
 function renderOrders() {
@@ -873,12 +907,29 @@ function renderOrders() {
             <td class="font-mono text-right" data-label="Продажа">${fmtCur(c.totalSale)}</td>
             <td class="font-mono text-right" data-label="Получено">${fmtCur(c.paidByClient)}</td>
             <td class="font-mono text-right ${c.clientDebt > 0 ? 'text-red' : ''}" data-label="Осталось">${c.clientDebt > 0 ? fmtCur(c.clientDebt) : '—'}</td>
-            <td data-label="Доставлено"><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></td>
+            <td data-label="Статус">
+                <select class="order-status-select badge-${o.status}" data-order="${o.id}" onclick="event.stopPropagation()">
+                    ${STATUS_COMPAT[o.status] ? `<option value="${o.status}" selected>${statusLabel(o.status)}</option>` : ''}
+                    ${Object.entries(STATUS_LABELS).map(([k, v]) => `<option value="${k}" ${o.status === k ? 'selected' : ''}>${v}</option>`).join('')}
+                </select>
+            </td>
             <td data-label="Клиент">${clientName(o.client_id)}</td>
             <td data-label="Телефон">${clientPhone(o.client_id) || '—'}</td>
             <td data-label=""><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openOrderDetail(${o.id})">Открыть</button></td>
         </tr>`;
     }).join('') : '<tr><td colspan="11" class="empty-state">Нет заказов</td></tr>';
+
+    // Смена статуса прямо из списка
+    document.querySelectorAll('#ordersBody .order-status-select').forEach(sel => {
+        sel.addEventListener('change', e => {
+            e.stopPropagation();
+            const o = orders.find(x => x.id === +sel.dataset.order);
+            if (!o) return;
+            o.status = sel.value;
+            sel.className = 'order-status-select badge-' + o.status;
+            sbUpdateOrder(o, { status: o.status });
+        });
+    });
 
     // Пагинация
     let pagBox = document.getElementById('ordersPagination');
@@ -902,7 +953,10 @@ function renderOrders() {
     `;
 
     document.querySelectorAll('#ordersBody tr[data-order]').forEach(tr => {
-        tr.addEventListener('click', () => openOrderDetail(+tr.dataset.order));
+        tr.addEventListener('click', e => {
+            if (e.target.closest('.order-status-select')) return;   // клик по статусу — не открываем карточку
+            openOrderDetail(+tr.dataset.order);
+        });
     });
 }
 // Сбрасываем страницу при изменении фильтров
@@ -1028,7 +1082,7 @@ function openOrderDetail(orderId) {
             </div>
             <div class="detail-item">
                 <div class="detail-label">Статус</div>
-                <div class="detail-value"><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></div>
+                <div class="detail-value"><span class="badge badge-${o.status}">${statusLabel(o.status)}</span></div>
             </div>
         </div>
 
@@ -1464,7 +1518,7 @@ window.openClientDetail = function(clientId) {
                     <td>${fmtDate(o.created_at)}</td>
                     <td class="font-mono">${fmtCur(oc.totalSale)}</td>
                     <td class="font-mono">${fmtCur(oc.paidByClient)}</td>
-                    <td><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></td>
+                    <td><span class="badge badge-${o.status}">${statusLabel(o.status)}</span></td>
                 </tr>`;
             }).join('') : '<tr><td colspan="5" class="empty-state">Нет заказов</td></tr>'}</tbody>
         </table>
@@ -1670,7 +1724,7 @@ window.openSupplierDetail = function(supplierId) {
                     <td>${fmtDate(o.created_at)}</td>
                     <td>${clientName(o.client_id)}</td>
                     <td class="font-mono">${fmtCur(supplierTotal)}</td>
-                    <td><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></td>
+                    <td><span class="badge badge-${o.status}">${statusLabel(o.status)}</span></td>
                 </tr>`;
             }).join('')}</tbody>
         </table>
@@ -2102,7 +2156,7 @@ searchInput.addEventListener('input', () => {
             const product = o.items.map(i => i.product_name).filter(Boolean).join(', ');
             html += `<div class="search-item" data-action="order" data-id="${o.id}">
                                 <span class="search-item-main">${o.order_number} — ${clientName(o.client_id)}<br><span class="text-muted" style="font-size:12px">${product.slice(0, 50)}</span></span>
-                <span class="search-item-sub"><span class="badge badge-${o.status}">${STATUS_LABELS[o.status]}</span></span>
+                <span class="search-item-sub"><span class="badge badge-${o.status}">${statusLabel(o.status)}</span></span>
             </div>`;
         });
     }
@@ -2399,6 +2453,11 @@ window.saveNewOrder = function() {
 document.getElementById('btnNewOrder2').addEventListener('click', openNewOrderForm);
 document.getElementById('btnNewSupplier').addEventListener('click', () => openSupplierForm());
 document.getElementById('btnNewClient').addEventListener('click', openNewClientForm);
+document.getElementById('ordersMonthsToggle').addEventListener('click', () => {
+    window.ordersMonthsOpen = !window.ordersMonthsOpen;
+    localStorage.setItem('orders_months_open', window.ordersMonthsOpen ? '1' : '0');
+    applyOrdersMonthsState();
+});
 
 // ─── Подсказки адреса (Яндекс.Карты, Geosuggest) ─────────────
 // Работает на полях с классом .addr-suggest (адрес доставки в заказе, адрес

@@ -393,6 +393,11 @@ body.modal-open { overflow: hidden; }
 .cat-item.is-expense .fin-sum { color: var(--red, #dc2626); }
 .cat-item.active .fin-sum { color: #fff !important; }
 
+/* Заказы: сворачиваемая панель месяцев */
+.months-toggle { margin-bottom: 12px; }
+#ordersLayout .orders-months { flex-basis: 168px; max-height: 72vh; overflow-y: auto; }
+#ordersLayout.months-collapsed .orders-months { display: none; }
+
 /* Панель массового действия (каталог продукции) */
 .bulk-bar {
     display: flex; align-items: center; gap: 10px;
@@ -664,6 +669,23 @@ body.modal-open { overflow: hidden; }
 .badge-delivering        { background: var(--amber-50);   color: var(--amber-600); }
 .badge-delivered         { background: var(--green-100);  color: var(--green-700); }
 .badge-closed            { background: var(--slate-200);  color: var(--slate-600); }
+.badge-request_sent      { background: #eef2ff; color: #4f46e5; }
+.badge-reply_received    { background: #ecfeff; color: #0891b2; }
+.badge-awaiting_shipment { background: var(--amber-50);  color: var(--amber-600); }
+.badge-shipped           { background: var(--purple-50); color: var(--purple-500); }
+.badge-to_warehouse      { background: #e0f2fe; color: #0284c7; }
+.badge-to_client         { background: #fff7ed; color: #ea580c; }
+
+/* Выпадающий выбор статуса прямо в таблице заказов (выглядит как бейдж) */
+.order-status-select {
+    font-size: 12px; font-weight: 600; padding: 4px 6px;
+    border: 1px solid transparent; border-radius: 999px;
+    width: 108px; cursor: pointer; -webkit-appearance: none; appearance: none;
+    background-image: none; text-overflow: ellipsis;
+}
+.order-status-select:hover { border-color: rgba(0,0,0,.12); }
+/* Заказы: компактнее отступы — больше колонок влезает без скролла */
+#ordersTable th, #ordersTable td { padding-left: 10px; padding-right: 10px; }
 
 .badge-income  { background: var(--green-100); color: var(--green-700); }
 .badge-expense { background: var(--red-100);   color: var(--red-600); }

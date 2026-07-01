@@ -6,7 +6,7 @@
     <title>Центр окон и дверей — CRM</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=38">
+    <link rel="stylesheet" href="style.css?v=40">
 </head>
 <body>
 
@@ -172,10 +172,12 @@
                     <select id="filterStatus">
                         <option value="">Все</option>
                         <option value="new">Новый</option>
-                        <option value="in_progress">В работе</option>
-                        <option value="ordered_from_supplier">Заказан у поставщика</option>
-                        <option value="received_at_warehouse">Получен на склад</option>
-                        <option value="delivering">Доставляется</option>
+                        <option value="request_sent">Заявка отправлена</option>
+                        <option value="reply_received">Ответ получен</option>
+                        <option value="awaiting_shipment">Ждёт отгрузки</option>
+                        <option value="shipped">Отгружен</option>
+                        <option value="to_warehouse">Доставка на склад</option>
+                        <option value="to_client">Доставка клиенту</option>
                         <option value="delivered">Доставлен</option>
                         <option value="closed">Закрыт</option>
                     </select>
@@ -187,26 +189,31 @@
                     <input type="date" id="filterDateTo">
                 </div>
             </div>
-            <div class="month-tabs" id="orderMonths"></div>
-            <div class="table-wrapper">
-                <table class="data-table" id="ordersTable">
-                    <thead>
-                        <tr>
-                            <th>Дата</th>
-                            <th>№ заказа</th>
-                            <th>Поставщик</th>
-                            <th>Закупка</th>
-                            <th>Продажа</th>
-                            <th>Получено</th>
-                            <th>Осталось</th>
-                            <th>Доставлено</th>
-                            <th>Клиент</th>
-                            <th>Телефон</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody id="ordersBody"></tbody>
-                </table>
+            <button class="btn btn-outline btn-sm months-toggle" id="ordersMonthsToggle">📅 Месяцы</button>
+            <div class="products-layout" id="ordersLayout">
+                <aside class="product-cats orders-months" id="orderMonths"></aside>
+                <div class="product-main">
+                    <div class="table-wrapper">
+                        <table class="data-table" id="ordersTable">
+                            <thead>
+                                <tr>
+                                    <th>Дата</th>
+                                    <th>№ заказа</th>
+                                    <th>Поставщик</th>
+                                    <th>Закупка</th>
+                                    <th>Продажа</th>
+                                    <th>Получено</th>
+                                    <th>Осталось</th>
+                                    <th>Статус</th>
+                                    <th>Клиент</th>
+                                    <th>Телефон</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="ordersBody"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -411,7 +418,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=38"></script>
-<script src="app.js?v=38"></script>
+<script src="supabase-config.js?v=40"></script>
+<script src="app.js?v=40"></script>
 </body>
 </html>
