@@ -4,8 +4,10 @@
 window.SUPABASE_URL = 'https://piokomyxclpjscddhemr.supabase.co';
 window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpb2tvbXl4Y2xwanNjZGRoZW1yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NDg3MTEsImV4cCI6MjA5ODQyNDcxMX0.N34KspvDsk7EmL4nNnHF-gvdoeGhXl5ifoomGsWxlWA';
 
-// Ключ Яндекс.Карт (Geosuggest API) для подсказок адреса при создании заказа/клиента.
-// Бесплатный, безопасен для браузера (ограничивается по домену в кабинете Яндекса).
-// Получить: https://developer.tech.yandex.ru → «API Геосаджеста» (JavaScript API и HTTP Геокодер).
-// Пока пусто — поле адреса работает как обычный текст, без подсказок.
-window.YANDEX_SUGGEST_KEY = 'f53ac585-9ff0-4942-b509-daf50ed65566';
+// Ключ Яндекс.Карт для подсказок адреса (ymaps.SuggestView в браузере).
+// ВАЖНО: нужен ключ продукта «JavaScript API и Геокодер (HTTP)» — НЕ отдельный
+// «API Геокодера» и НЕ «Геосаджест». В настройках ключа добавить домен(ы), где
+// крутится CRM (mentori.tech и адрес GitHub Pages), иначе Яндекс отвечает
+// «Invalid API key». На localhost domain-restricted ключ всегда «invalid» —
+// проверять только на боевом домене. Без валидного ключа поле — обычный текст.
+window.YANDEX_SUGGEST_KEY = '9257a8db-5228-4ea6-b3d4-c562507ac472';
