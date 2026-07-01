@@ -901,7 +901,9 @@ function renderOrders() {
         const supplierNames = [...new Set(o.items.map(i => i.supplier_id).filter(Boolean))].map(supplierName).join(', ') || '—';
         return `<tr data-order="${o.id}">
             <td data-label="Дата">${fmtDate(o.created_at)}</td>
-            <td class="td-bold" data-label="№ заказа">${o.order_number}</td>
+            <td class="td-bold" data-label="№ заказа">${o.order_number
+                ? o.order_number
+                : `<span class="text-muted" style="font-weight:500" title="Номер от производства ещё не присвоен — показан наш CRM-ID">${crmId(o)}</span>`}</td>
             <td data-label="Поставщик">${supplierNames}</td>
             <td class="font-mono text-right" data-label="Закупка">${fmtCur(c.totalPurchase)}</td>
             <td class="font-mono text-right" data-label="Продажа">${fmtCur(c.totalSale)}</td>
@@ -1058,11 +1060,15 @@ function openOrderDetail(orderId) {
     const client = clients.find(x => x.id === o.client_id) || {};
     const supplierIds = [...new Set(o.items.map(i => i.supplier_id))];
 
-    openModal('Заказ ' + o.order_number, `
+    openModal('Заказ ' + (o.order_number || crmId(o)), `
         <div class="detail-grid">
             <div class="detail-item">
-                <div class="detail-label">CRM-ID</div>
+                <div class="detail-label">CRM-ID <span class="text-muted" style="font-weight:400">(наш, для писем)</span></div>
                 <div class="detail-value td-bold" style="font-variant-numeric:tabular-nums">${crmId(o)}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">Номер от производства</div>
+                <div class="detail-value ${o.order_number ? 'td-bold' : 'text-muted'}">${o.order_number || 'ещё не присвоен'}</div>
             </div>
             <div class="detail-item">
                 <div class="detail-label">Дата создания</div>
@@ -1087,11 +1093,8 @@ function openOrderDetail(orderId) {
         </div>
 
         <div class="detail-section-title">Производство</div>
+        <p class="text-muted" style="font-size:12px;margin:-4px 0 8px">Номер от производства вписывается кнопкой «Редактировать» (поле «Номер от производства»). Наш CRM-ID уходит в письме — по нему привязывается ответ.</p>
         <div class="detail-grid">
-            <div class="detail-item">
-                <div class="detail-label">Номер производства</div>
-                <div class="detail-value ${o.production_number ? 'td-bold' : 'text-muted'}">${o.production_number || 'ещё не присвоен'}</div>
-            </div>
             <div class="detail-item">
                 <div class="detail-label">Статус от производства</div>
                 <div class="detail-value">${o.production_status ? `<span class="badge badge-in_progress">${PRODUCTION_STATUS_LABELS[o.production_status] || o.production_status}</span>` : '<span class="text-muted">нет данных</span>'}</div>
@@ -1243,10 +1246,14 @@ window.openOrderEditForm = function(orderId) {
 
         <div class="form-grid" style="margin-top:16px">
             <div class="form-group">
+                <label>Номер от производства <span class="text-muted" style="font-weight:400">(из ответа производства)</span></label>
+                <input type="text" id="editOrderNumber" value="${(o.order_number||'').replace(/"/g,'&quot;')}" placeholder="Впишите номер, который прислало производство" autocomplete="off">
+            </div>
+            <div class="form-group">
                 <label>Поставщик</label>
                 <input type="text" id="editSupplier" list="suppliersList" value="${curSupplier.replace(/"/g,'&quot;')}" autocomplete="off">
             </div>
-            <div class="form-group">
+            <div class="form-group full">
                 <label>Примечание</label>
                 <input type="text" id="editNotes" value="${(o.notes||'').replace(/"/g,'&quot;')}">
             </div>
@@ -1292,10 +1299,11 @@ window.saveOrderEdit = function(orderId) {
     o.created_at = document.getElementById('editCreatedDate').value || o.created_at;
     o.delivery_date = document.getElementById('editDeliveryDate').value || null;
     o.notes = document.getElementById('editNotes').value.trim();
+    o.order_number = document.getElementById('editOrderNumber').value.trim();
 
     // Сохраняем изменения заказа и его позиции в Supabase
     sbUpdateOrder(o, {
-        client_id: o.client_id, created_at: o.created_at,
+        client_id: o.client_id, created_at: o.created_at, order_number: o.order_number,
         delivery_date: o.delivery_date, notes: o.notes,
     });
     sbReplaceItems(o.id, items);
@@ -2330,6 +2338,10 @@ function openNewOrderForm() {
                 <input type="text" id="formSupplier" list="suppliersList" placeholder="Название поставщика" autocomplete="off">
             </div>
             <div class="form-group">
+                <label>Номер от производства <span class="text-muted" style="font-weight:400">(если уже есть)</span></label>
+                <input type="text" id="formProdNumber" placeholder="Впишете, когда придёт ответ" autocomplete="off">
+            </div>
+            <div class="form-group full">
                 <label>Примечание</label>
                 <input type="text" id="formNotes" placeholder="Комментарий к заказу">
             </div>
@@ -2433,7 +2445,9 @@ window.saveNewOrder = function() {
 
     const newOrder = {
         id: newId,
-        order_number: 'ЗК-' + String(newId).padStart(3, '0'),
+        // Номер от производства — пустой при создании; менеджер впишет его, когда
+        // придёт ответ с производства. Наш идентификатор для писем — CRM-ID (crmId).
+        order_number: (document.getElementById('formProdNumber')?.value || '').trim(),
         client_id: clientId,
         status: 'new',
         delivery_status: null,
