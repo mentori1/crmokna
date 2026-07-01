@@ -365,6 +365,22 @@ body.modal-open { overflow: hidden; }
     .cat-item { width: auto; }
 }
 
+/* Финансы: месяцы по годам (вертикально) */
+#finMonths { flex-basis: 250px; }
+#finMonths.product-cats { max-height: 70vh; overflow-y: auto; padding-right: 4px; }
+.fin-year-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 13px 4px; margin-top: 6px;
+    font-size: 12px; font-weight: 700; color: var(--slate-400);
+    text-transform: uppercase; letter-spacing: .5px;
+    border-top: 1px solid var(--slate-100);
+}
+.fin-year-head b { color: var(--slate-600); font-size: 12px; }
+.fin-sum { flex: 0 0 auto; margin-left: auto; font-size: 12.5px; white-space: nowrap; }
+.cat-item.is-income .fin-sum { color: var(--green, #16a34a); }
+.cat-item.is-expense .fin-sum { color: var(--red, #dc2626); }
+.cat-item.active .fin-sum { color: #fff !important; }
+
 /* Панель массового действия (каталог продукции) */
 .bulk-bar {
     display: flex; align-items: center; gap: 10px;

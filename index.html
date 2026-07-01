@@ -6,7 +6,7 @@
     <title>Центр окон и дверей — CRM</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=32">
+    <link rel="stylesheet" href="style.css?v=33">
 </head>
 <body>
 
@@ -306,29 +306,36 @@
                 <button class="fin-tab" data-fintype="income">Доходы</button>
                 <button class="fin-tab" data-fintype="expense">Расходы</button>
             </div>
-            <div class="month-tabs" id="finMonths"></div>
-            <div class="table-wrapper">
-                <table class="data-table" id="financeTable">
-                    <thead>
-                        <tr>
-                            <th>Дата</th>
-                            <th>Тип</th>
-                            <th>Контрагент</th>
-                            <th>Заказ</th>
-                            <th>Приход</th>
-                            <th>Расход</th>
-                            <th>Описание</th>
-                        </tr>
-                    </thead>
-                    <tbody id="financeBody"></tbody>
-                </table>
+            <div class="products-layout">
+                <aside class="product-cats" id="finMonths"></aside>
+                <div class="product-main">
+                    <div class="table-wrapper">
+                        <table class="data-table" id="financeTable">
+                            <thead>
+                                <tr>
+                                    <th>Дата</th>
+                                    <th>Тип</th>
+                                    <th>Контрагент</th>
+                                    <th>Заказ</th>
+                                    <th>Приход</th>
+                                    <th>Расход</th>
+                                    <th>Описание</th>
+                                </tr>
+                            </thead>
+                            <tbody id="financeBody"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </section>
 
         <!-- ─── Products catalog ─── -->
         <section class="section" id="section-products">
-            <h1 class="section-title">Продукция</h1>
-            <p class="text-muted" style="margin:-12px 0 16px">Список названий товаров из заказов. Кнопка «−» убирает мусорное название из подсказок при создании заказа (сами заказы не меняются).</p>
+            <div class="section-header">
+                <h1 class="section-title">Продукция</h1>
+                <button class="btn btn-primary" onclick="openAddProductForm()">+ Добавить товар</button>
+            </div>
+            <p class="text-muted" style="margin:-4px 0 16px">Список названий товаров из заказов. Кнопка «−» убирает мусорное название из подсказок при создании заказа (сами заказы не меняются).</p>
             <div class="metrics-grid" id="productsMetrics"></div>
             <div class="search-box" style="max-width:none;margin:16px 0 12px">
                 <input type="text" id="productSearch" placeholder="Поиск по названию…" autocomplete="off">
@@ -404,7 +411,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=32"></script>
-<script src="app.js?v=32"></script>
+<script src="supabase-config.js?v=33"></script>
+<script src="app.js?v=33"></script>
 </body>
 </html>

@@ -323,11 +323,16 @@ function isJunkProductName(name) {
 // Названия, вручную скрытые владельцем (мусор, который не поймал фильтр).
 // Загружаются из таблицы product_hidden; ключ — само название.
 let hiddenProducts = new Set();
+// Товары, добавленные владельцем вручную (могут ещё не встречаться в заказах).
+// Из таблицы product_custom.
+let customProducts = new Set();
 
-// Список названий продукции для автодополнения — без служебного шлака и скрытых
+// Список названий продукции для автодополнения — без служебного шлака и скрытых,
+// плюс добавленные вручную
 function getProductNameSuggestions() {
-    const names = [...new Set(orders.flatMap(o => o.items.map(i => i.product_name)).filter(Boolean))];
-    return names.filter(n => !isJunkProductName(n) && !hiddenProducts.has(n)).slice(0, 500);
+    const orderNames = orders.flatMap(o => o.items.map(i => i.product_name)).filter(Boolean);
+    const all = [...new Set([...orderNames, ...customProducts])];
+    return all.filter(n => (customProducts.has(n) || !isJunkProductName(n)) && !hiddenProducts.has(n)).slice(0, 500);
 }
 
 // ─── Каталог продукции (раздел «Продукция») ──────────────────
@@ -376,10 +381,12 @@ function renderProductCatalog() {
         const nm = i.product_name;
         if (nm) useCount[nm] = (useCount[nm] || 0) + 1;
     }));
-    let names = Object.keys(useCount).filter(n => !isJunkProductName(n) && !hiddenProducts.has(n));
+    let names = Object.keys(useCount).filter(n => !isJunkProductName(n));
+    customProducts.forEach(n => { if (!(n in useCount)) names.push(n); });   // добавленные вручную (ещё без заказов)
+    names = [...new Set(names)].filter(n => !hiddenProducts.has(n));
 
     // категория для каждого
-    const withCat = names.map(n => ({ name: n, cat: productCategory(n), count: useCount[n] }));
+    const withCat = names.map(n => ({ name: n, cat: productCategory(n), count: useCount[n] || 0 }));
 
     // Метрики
     document.getElementById('productsMetrics').innerHTML = `
@@ -449,6 +456,36 @@ window.hideProductName = async function(name) {
     const { error } = await SB.from('product_hidden').upsert({ name }, { onConflict: 'name' });
     if (error) { dbErr('скрытие товара', error); hiddenProducts.delete(name); renderProductCatalog(); return; }
     dbToast('Название убрано из подсказок', true);
+};
+
+// Добавить новый товар в каталог (появится в подсказках при создании заказа)
+window.openAddProductForm = function() {
+    openModal('Новый товар', `
+        <div class="form-group">
+            <label>Название товара</label>
+            <input type="text" id="newProductName" placeholder="Например: Ветровая планка коричневая" autocomplete="off">
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-outline" onclick="closeModal()">Отмена</button>
+            <button class="btn btn-primary" onclick="saveNewProductName()">Добавить</button>
+        </div>
+    `);
+    setTimeout(() => document.getElementById('newProductName').focus(), 50);
+};
+window.saveNewProductName = async function() {
+    const name = document.getElementById('newProductName').value.trim();
+    if (!name) { alert('Укажите название товара'); return; }
+    if (customProducts.has(name) || getProductNameSuggestions().includes(name)) {
+        alert('Такой товар уже есть в списке'); return;
+    }
+    customProducts.add(name);
+    hiddenProducts.delete(name);           // если был скрыт — возвращаем
+    closeModal();
+    renderProductCatalog();
+    const { error } = await SB.from('product_custom').upsert({ name }, { onConflict: 'name' });
+    await SB.from('product_hidden').delete().eq('name', name);   // снять скрытие, если было
+    if (error) { dbErr('добавление товара', error); customProducts.delete(name); renderProductCatalog(); return; }
+    dbToast('Товар добавлен', true);
 };
 
 // Массовое скрытие выбранных галочками названий
@@ -1616,18 +1653,25 @@ function renderFinances() {
     const totalAll = typed.reduce((s, t) => s + t.amount, 0);
 
     const sumClass = type === 'income' ? 'is-income' : type === 'expense' ? 'is-expense' : '';
-    const tab = (val, label, sum) =>
-        `<button class="month-tab ${sumClass} ${window.finMonth === val ? 'active' : ''}" data-fmonth="${val}">
-            ${label} · <b>${fmtCur(sum)}</b>
+    const item = (val, label, sum) =>
+        `<button class="cat-item ${sumClass} ${window.finMonth === val ? 'active' : ''}" data-fmonth="${val}">
+            <span class="cat-item-label">${label}</span><b class="fin-sum">${fmtCur(sum)}</b>
         </button>`;
-    let tabsHtml = tab('', 'Всё время', totalAll);
-    months.forEach(m => {
-        const [y, mo] = m.split('-');
-        tabsHtml += tab(m, `${MONTH_NAMES_FULL[+mo - 1]} ${y.slice(2)}`, monthSum[m]);
+    // «Всё время» + месяцы, сгруппированные по годам (год — заголовком)
+    let html = item('', 'Всё время', totalAll);
+    const byYear = {};
+    months.forEach(m => { const y = m.slice(0, 4); (byYear[y] = byYear[y] || []).push(m); });
+    Object.keys(byYear).sort().reverse().forEach(y => {
+        const yearSum = byYear[y].reduce((s, m) => s + monthSum[m], 0);
+        html += `<div class="fin-year-head"><span>${y}</span><b>${fmtCur(yearSum)}</b></div>`;
+        byYear[y].forEach(m => {
+            const mo = +m.slice(5, 7);
+            html += item(m, MONTH_NAMES_FULL[mo - 1], monthSum[m]);
+        });
     });
     const finMonthsBox = document.getElementById('finMonths');
-    finMonthsBox.innerHTML = tabsHtml;
-    finMonthsBox.querySelectorAll('.month-tab').forEach(btn => {
+    finMonthsBox.innerHTML = html;
+    finMonthsBox.querySelectorAll('.cat-item').forEach(btn => {
         btn.addEventListener('click', () => { window.finMonth = btn.dataset.fmonth; renderFinances(); });
     });
     // Подсветка активной кнопки Все/Доходы/Расходы
@@ -2473,11 +2517,15 @@ async function loadData() {
         clients = c;
         suppliers = s;
         transactions = t.map(x => ({ ...x, amount: +x.amount }));
-        // Скрытые вручную названия продукции (для чистки подсказок)
+        // Скрытые/добавленные вручную названия продукции
         try {
-            const { data: hp } = await SB.from('product_hidden').select('name');
+            const [{ data: hp }, { data: cp }] = await Promise.all([
+                SB.from('product_hidden').select('name'),
+                SB.from('product_custom').select('name'),
+            ]);
             hiddenProducts = new Set((hp || []).map(r => r.name));
-        } catch (e) { hiddenProducts = new Set(); }
+            customProducts = new Set((cp || []).map(r => r.name));
+        } catch (e) { hiddenProducts = new Set(); customProducts = new Set(); }
         // Разворачиваем вложенные order_items в o.items (с приведением чисел)
         orders = ordRaw.map(o => {
             const items = (o.order_items || []).map(i => ({
