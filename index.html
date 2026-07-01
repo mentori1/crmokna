@@ -6,7 +6,7 @@
     <title>Центр окон и дверей — CRM</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=27">
+    <link rel="stylesheet" href="style.css?v=29">
 </head>
 <body>
 
@@ -98,7 +98,16 @@
             <div class="search-dropdown" id="searchDropdown"></div>
         </div>
         <div class="topbar-actions">
-            <button class="btn btn-primary" id="btnNewOrder">+ Новый заказ</button>
+            <div class="notif-wrap">
+                <button class="notif-btn" id="notifBtn" title="Уведомления" aria-label="Уведомления">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6 9a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6"/>
+                        <path d="M10.5 20a2 2 0 003 0"/>
+                    </svg>
+                    <span class="notif-badge" id="notifBadge" style="display:none">0</span>
+                </button>
+                <div class="notif-dropdown" id="notifDropdown"></div>
+            </div>
         </div>
     </header>
 
@@ -357,7 +366,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=27"></script>
-<script src="app.js?v=27"></script>
+<script src="supabase-config.js?v=29"></script>
+<script src="app.js?v=29"></script>
 </body>
 </html>

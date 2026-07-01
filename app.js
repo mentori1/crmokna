@@ -215,6 +215,11 @@ async function sbDeleteSupplier(s) {
     const ok = await sbUpdate('suppliers', s, { deleted_at: new Date().toISOString() }, 'удаление поставщика');
     if (ok) dbToast('Поставщик удалён', true);
 }
+async function sbDeleteOrder(o) {
+    const ok = await sbUpdate('orders', o, { deleted_at: new Date().toISOString() }, 'удаление заказа');
+    if (ok) dbToast('Заказ удалён', true);
+    return ok;
+}
 
 
 const STATUS_LABELS = {
@@ -291,6 +296,35 @@ const categoryName = id => (categories.find(c => c.id === id) || {}).name || '�
 // Сейчас выводится из o.id; при двусторонней синхронизации станет постоянной
 // колонкой в Google Таблице (см. INTEGRATION.md).
 const crmId = o => o.crm_id || ('CRM-' + String(o.id).padStart(5, '0'));
+
+// Слова, из-за которых название товара — на самом деле служебная заметка
+// (доставка/оплата/дата/статус), а не продукция. Используется только для
+// автодополнения при вводе позиций заказа — исторические записи не меняются.
+const PRODUCT_NOISE_WORDS = new Set([
+    'доставка','доставки','доставкой','доставку','оплачена','оплачено','оплачен',
+    'оплаченный','отдать','вернуть','отправлено','остаток','забирать','приостановлен',
+    'приостановлена','наличии','наличие','ждем','ждём','ждать','руб','рублей','рубль',
+    'или','либо','штук','монтаж','заберет','заберёт','заберут','отдали','отдал','отдала',
+    'отдано','выдать','выдали','пятница','суббота','воскресенье','понедельник','вторник',
+    'среда','четверг','январь','февраль','март','апрель','май','июнь','июль','август',
+    'сентябрь','октябрь','ноябрь','декабрь','привезли','привезти','заказ','заказа',
+    'заказан','заказать','готов','готово','готовность','возврат','гот','подъем','подъём',
+    'этаж','поступление','примерно','рассрочкой','рассрочка',
+]);
+function isJunkProductName(name) {
+    const n = (name || '').trim();
+    if (!n) return true;
+    if (/^заказ\s+у\s/i.test(n)) return true;              // поставщик, попавший в поле товара
+    if (/^[\d\s.,/?+-]+$/.test(n)) return true;             // голое число/дата/дробь
+    const words = (n.toLowerCase().match(/[а-яёa-z]{3,}/g) || []);
+    if (!words.length) return true;
+    return words.every(w => PRODUCT_NOISE_WORDS.has(w));
+}
+// Список названий продукции для автодополнения — без служебного шлака
+function getProductNameSuggestions() {
+    const names = [...new Set(orders.flatMap(o => o.items.map(i => i.product_name)).filter(Boolean))];
+    return names.filter(n => !isJunkProductName(n)).slice(0, 500);
+}
 
 // Статусы заказа от производства (присылаются в письмах)
 const PRODUCTION_STATUS_LABELS = {
@@ -889,7 +923,10 @@ function openOrderDetail(orderId) {
         </div>
 
         <div class="form-actions" style="margin-top:24px">
-            <button class="btn btn-outline" onclick="openOrderEditForm(${o.id})" style="margin-right:auto">Редактировать</button>
+            <div style="display:flex;gap:8px;margin-right:auto">
+                <button class="btn btn-outline" onclick="openOrderEditForm(${o.id})">Редактировать</button>
+                <button class="btn btn-danger" onclick="deleteOrder(${o.id})">Удалить заказ</button>
+            </div>
             <select id="modalStatusSelect" style="padding:8px 12px;border:1px solid var(--slate-300);border-radius:6px;font-size:13px">
                 ${Object.entries(STATUS_LABELS).map(([k,v]) => `<option value="${k}" ${o.status===k?'selected':''}>${v}</option>`).join('')}
             </select>
@@ -903,7 +940,7 @@ window.openOrderEditForm = function(orderId) {
     const o = orders.find(x => x.id === orderId);
     if (!o) return;
     const client = clients.find(x => x.id === o.client_id) || {};
-    const productNames = [...new Set(orders.flatMap(ord => ord.items.map(i => i.product_name)).filter(Boolean))].slice(0, 500);
+    const productNames = getProductNameSuggestions();
     const supplierNames = [...new Set(suppliers.map(s => s.name))];
     const curSupplier = supplierName(o.items.find(i => i.supplier_id)?.supplier_id) || '';
 
@@ -1001,6 +1038,19 @@ window.saveOrderEdit = function(orderId) {
     // обновим таблицу под модалкой
     const active = document.querySelector('.nav-item.active');
     if (active) renderSection(active.dataset.section);
+};
+
+// Удаление ошибочного заказа (soft-delete — можно восстановить из бэкапа)
+window.deleteOrder = async function(orderId) {
+    const o = orders.find(x => x.id === orderId);
+    if (!o) return;
+    if (!confirm(`Удалить заказ ${o.order_number}? Платежи по нему останутся в истории.`)) return;
+    const ok = await sbDeleteOrder(o);
+    if (!ok) return;
+    const idx = orders.findIndex(x => x.id === orderId);
+    if (idx !== -1) orders.splice(idx, 1);
+    closeModal();
+    navigate('orders');
 };
 
 window.changeOrderStatus = function(orderId) {
@@ -1856,7 +1906,7 @@ document.addEventListener('input', (e) => {
 
 function openNewOrderForm() {
     // Уникальные названия ранее заказанной продукции — для автодополнения
-    const productNames = [...new Set(orders.flatMap(o => o.items.map(i => i.product_name)).filter(Boolean))].slice(0, 500);
+    const productNames = getProductNameSuggestions();
     const supplierNames = [...new Set(suppliers.map(s => s.name))];
 
     openModal('Новый заказ', `
@@ -2027,9 +2077,119 @@ window.saveNewOrder = function() {
     navigate('orders');
 };
 
-document.getElementById('btnNewOrder').addEventListener('click', openNewOrderForm);
 document.getElementById('btnNewOrder2').addEventListener('click', openNewOrderForm);
 document.getElementById('btnNewSupplier').addEventListener('click', () => openSupplierForm());
+
+// ─── Уведомления ─────────────────────────────────────────────
+// Единый центр: статусы производства, ближайшие/просроченные доставки, новые
+// заказы. Позже сюда же будут падать письма с почты (интеграция с производством).
+const NOTIF_SEEN_KEY = 'notif_last_seen_v1';
+
+function buildNotifications() {
+    const list = [];
+    const today = new Date().toISOString().slice(0, 10);
+    const plus7 = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+
+    orders.forEach(o => {
+        // Статус от производства (появится, когда заработает синхронизация с почтой)
+        if (o.production_status) {
+            const h = (o.status_history && o.status_history.length) ? o.status_history[o.status_history.length - 1] : null;
+            list.push({
+                id: 'prod-' + o.id, ts: (h && h.date) || o.created_at, kind: 'production',
+                title: `Производство: ${PRODUCTION_STATUS_LABELS[o.production_status] || o.production_status}`,
+                sub: `${o.order_number} · ${clientName(o.client_id)}`, orderId: o.id,
+            });
+        }
+    });
+
+    // Доставки: просроченные и ближайшие (7 дней) среди открытых заказов
+    orders.filter(o => o.status !== 'closed' && o.delivery_date).forEach(o => {
+        if (o.delivery_date < today) {
+            list.push({ id: 'del-late-' + o.id, ts: o.delivery_date, kind: 'late',
+                title: `Просрочена доставка`, sub: `${o.order_number} · ${clientName(o.client_id)} · ${fmtDate(o.delivery_date)}`, orderId: o.id });
+        } else if (o.delivery_date <= plus7) {
+            list.push({ id: 'del-soon-' + o.id, ts: o.delivery_date, kind: 'soon',
+                title: `Скоро доставка`, sub: `${o.order_number} · ${clientName(o.client_id)} · ${fmtDate(o.delivery_date)}`, orderId: o.id });
+        }
+    });
+
+    // Новые заказы за последние 14 дней
+    const since = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
+    orders.filter(o => o.created_at && o.created_at >= since && o.status === 'new').forEach(o => {
+        list.push({ id: 'new-' + o.id, ts: o.created_at, kind: 'new',
+            title: `Новый заказ`, sub: `${o.order_number} · ${clientName(o.client_id)}`, orderId: o.id });
+    });
+
+    // Новые — сверху
+    return list.sort((a, b) => String(b.ts).localeCompare(String(a.ts))).slice(0, 40);
+}
+
+const NOTIF_ICONS = {
+    production: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21V9l6-3.2v3.4l6-3.2v3.4l6-3.2V21z"/></svg>',
+    late:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>',
+    soon:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>',
+    new:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>',
+};
+
+function renderNotifications() {
+    const box = document.getElementById('notifDropdown');
+    const badge = document.getElementById('notifBadge');
+    if (!box) return;
+    const items = buildNotifications();
+    const lastSeen = localStorage.getItem(NOTIF_SEEN_KEY) || '';
+    const unread = items.filter(n => String(n.ts) > lastSeen).length;
+
+    if (badge) {
+        if (unread > 0) { badge.textContent = unread > 99 ? '99+' : unread; badge.style.display = ''; }
+        else badge.style.display = 'none';
+    }
+
+    box.innerHTML = `
+        <div class="notif-head">
+            <span>Уведомления</span>
+            ${items.length ? '<button class="notif-clear" id="notifClear">Отметить прочитанными</button>' : ''}
+        </div>
+        ${items.length ? items.map(n => `
+            <div class="notif-item notif-${n.kind} ${String(n.ts) > lastSeen ? 'is-unread' : ''}" data-order="${n.orderId}">
+                <span class="notif-ic">${NOTIF_ICONS[n.kind] || ''}</span>
+                <span class="notif-body">
+                    <span class="notif-title">${n.title}</span>
+                    <span class="notif-sub">${n.sub}</span>
+                </span>
+            </div>`).join('')
+        : '<div class="notif-empty">Пока нет уведомлений.<br>Сюда будут падать статусы заказов и письма с производства.</div>'}
+    `;
+
+    box.querySelectorAll('.notif-item').forEach(el => {
+        el.addEventListener('click', () => {
+            document.getElementById('notifDropdown').classList.remove('open');
+            openOrderDetail(+el.dataset.order);
+        });
+    });
+    const clearBtn = document.getElementById('notifClear');
+    if (clearBtn) clearBtn.addEventListener('click', () => {
+        localStorage.setItem(NOTIF_SEEN_KEY, new Date().toISOString().slice(0, 10));
+        renderNotifications();
+    });
+}
+
+document.getElementById('notifBtn').addEventListener('click', e => {
+    e.stopPropagation();
+    const dd = document.getElementById('notifDropdown');
+    const opening = !dd.classList.contains('open');
+    dd.classList.toggle('open');
+    if (opening) {
+        renderNotifications();
+        // помечаем как «просмотрено» (гасим счётчик), список остаётся
+        localStorage.setItem(NOTIF_SEEN_KEY, new Date().toISOString().slice(0, 10));
+        const badge = document.getElementById('notifBadge');
+        setTimeout(() => { if (badge) badge.style.display = 'none'; }, 1200);
+    }
+});
+document.addEventListener('click', e => {
+    const dd = document.getElementById('notifDropdown');
+    if (dd && dd.classList.contains('open') && !e.target.closest('.notif-wrap')) dd.classList.remove('open');
+});
 
 // Живое форматирование телефона (+7 подставляется само) во всех полях .phone-input
 document.addEventListener('input', e => {
@@ -2177,6 +2337,7 @@ async function loadData() {
         console.log(`Загружено из Supabase: ${orders.length} заказов, ${clients.length} клиентов, ${suppliers.length} поставщиков, ${transactions.length} транзакций`);
         const initial = location.hash.replace('#', '') || 'dashboard';
         navigate(initial);
+        renderNotifications();        // счётчик уведомлений в шапке
         subscribeRealtime();          // живая синхронизация: чужие правки видны сразу
     } catch (err) {
         console.error('Ошибка загрузки данных:', err);
