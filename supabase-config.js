@@ -10,4 +10,4 @@ window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXB
 // крутится CRM (mentori.tech и адрес GitHub Pages), иначе Яндекс отвечает
 // «Invalid API key». На localhost domain-restricted ключ всегда «invalid» —
 // проверять только на боевом домене. Без валидного ключа поле — обычный текст.
-window.YANDEX_SUGGEST_KEY = '9257a8db-5228-4ea6-b3d4-c562507ac472';
+window.YANDEX_SUGGEST_KEY = 'caf4257d-3c93-439a-bcbf-663fc7ba6f58';
