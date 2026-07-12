@@ -228,6 +228,10 @@ class Handler(BaseHTTPRequestHandler):
                     conn.execute("begin immediate")
                     for item in items:
                         clean = self.clean_row(conn, table, item, inserting=True, actor=user["id"])
+                        if table in {"clients", "suppliers", "transactions"} and clean.get("id") is not None:
+                            occupied = conn.execute(f"select 1 from {table} where id=?", (clean["id"],)).fetchone()
+                            if occupied:
+                                clean["id"] = conn.execute(f"select coalesce(max(id),0)+1 from {table}").fetchone()[0]
                         cols = list(clean)
                         conn.execute(f"insert into {table} ({','.join(cols)}) values ({','.join('?' for _ in cols)})", [clean[c] for c in cols])
                         created.append(clean)
@@ -302,6 +306,8 @@ class Handler(BaseHTTPRequestHandler):
                     if existing:
                         return self.send_json(200, {"data": existing["id"]})
                 clean = self.clean_row(conn, "orders", order, True, user["id"])
+                if conn.execute("select 1 from orders where id=?", (clean.get("id"),)).fetchone():
+                    clean["id"] = conn.execute("select coalesce(max(id),0)+1 from orders").fetchone()[0]
                 cols = list(clean)
                 conn.execute(f"insert into orders ({','.join(cols)}) values ({','.join('?' for _ in cols)})", [clean[c] for c in cols])
                 for item in items:

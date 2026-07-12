@@ -40,7 +40,9 @@ def main():
             first_client = result[0]['id']
     print('counts:', json.dumps(counts, ensure_ascii=False))
 
-    test_id = 900000000002
+    # 4942 занят мягко удалённым историческим заказом. Сервер обязан сам
+    # выдать свободный ID, а не вернуть бесконечный конфликт 409.
+    test_id = 4942
     order = {
         'id': test_id, 'order_number': 'SERVER-SMOKE-TEST', 'client_id': first_client,
         'status': 'new', 'created_at': '2026-07-12', 'notes': 'temporary smoke test',
@@ -50,21 +52,22 @@ def main():
         'product_name': 'Тестовая позиция', 'quantity': 1,
         'purchase_price': 10, 'sale_price': 20,
     }]})['data']
-    assert created == test_id
-    print('create_order: ok')
+    assert created != test_id
+    actual_id = created
+    print(f'create_order_collision_reassigned: ok ({test_id} -> {actual_id})')
 
     first = call('/api/query', {'table': 'orders', 'action': 'update',
-        'filters': [{'column':'id','op':'eq','value':test_id},{'column':'version','op':'eq','value':1}],
+        'filters': [{'column':'id','op':'eq','value':actual_id},{'column':'version','op':'eq','value':1}],
         'values': {'notes':'writer one'}})['data']
     assert first['version'] == 2
     stale = call('/api/query', {'table': 'orders', 'action': 'update',
-        'filters': [{'column':'id','op':'eq','value':test_id},{'column':'version','op':'eq','value':1}],
+        'filters': [{'column':'id','op':'eq','value':actual_id},{'column':'version','op':'eq','value':1}],
         'values': {'notes':'stale writer two'}})['data']
     assert stale is None
     print('optimistic_lock: ok')
 
-    call('/api/query', {'table':'orders','action':'delete','filters':[{'column':'id','op':'eq','value':test_id}]})
-    remaining = call('/api/query', {'table':'orders','action':'select','filters':[{'column':'id','op':'eq','value':test_id}]})['data']
+    call('/api/query', {'table':'orders','action':'delete','filters':[{'column':'id','op':'eq','value':actual_id}]})
+    remaining = call('/api/query', {'table':'orders','action':'select','filters':[{'column':'id','op':'eq','value':actual_id}]})['data']
     assert not remaining
     print('cleanup: ok')
 

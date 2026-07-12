@@ -128,7 +128,7 @@ try { opsQueue = JSON.parse(localStorage.getItem(OPS_KEY) || '[]'); } catch (e) 
 function saveOps() {
     try {
         // _orderRef — живая ссылка, не сериализуем (после reload не нужна)
-        localStorage.setItem(OPS_KEY, JSON.stringify(opsQueue.map(({ _orderRef, ...op }) => op)));
+        localStorage.setItem(OPS_KEY, JSON.stringify(opsQueue.map(({ _orderRef, _rowRef, ...op }) => op)));
     } catch (e) {}
 }
 function enqueueOp(op) { op.retries = 0; opsQueue.push(op); saveOps(); processOps(); }
@@ -158,8 +158,13 @@ async function execOp(op) {
     }
     if (op.t === 'insTx' || op.t === 'insClient' || op.t === 'insSupplier') {
         const table = { insTx: 'transactions', insClient: 'clients', insSupplier: 'suppliers' }[op.t];
-        const { error } = await SB.from(table).insert(op.row);
+        const { data, error } = await SB.from(table).insert(op.row);
         if (error) throw error;
+        const saved = Array.isArray(data) ? data[0] : data;
+        if (saved && saved.id != null && saved.id !== op.row.id) {
+            rebindLocalId(op.t, op.row.id, saved.id, op._rowRef);
+            op.row.id = saved.id;
+        }
         return 'ok';
     }
     return 'drop';
@@ -231,10 +236,37 @@ async function sbReplaceItems(orderId, items) {
     const { error } = await SB.rpc('replace_order_items', { p_order_id: orderId, p_items: items || [] });
     dbErr('позиции заказа', error);
 }
-function sbInsertTransaction(t) { enqueueOp({ t: 'insTx', row: t }); }
-function sbInsertClient(c) { enqueueOp({ t: 'insClient', row: c }); }
-function sbInsertSupplier(s) { enqueueOp({ t: 'insSupplier', row: s }); }
+function sbInsertTransaction(t) { enqueueOp({ t: 'insTx', row: t, _rowRef: t }); }
+function sbInsertClient(c) { enqueueOp({ t: 'insClient', row: c, _rowRef: c }); }
+function sbInsertSupplier(s) { enqueueOp({ t: 'insSupplier', row: s, _rowRef: s }); }
 function nextLocalId(arr) { return arr.length ? Math.max(...arr.map(x => x.id)) + 1 : 1; }
+
+// Сервер может заменить занятый локальный ID на следующий свободный. Обновляем
+// объект в памяти и все ещё не отправленные зависимые операции.
+function rebindLocalId(type, oldId, newId, rowRef) {
+    if (rowRef) rowRef.id = newId;
+    if (type === 'insClient') {
+        const local = clients.find(x => x.id === oldId);
+        if (local) local.id = newId;
+        orders.forEach(o => { if (o.client_id === oldId) o.client_id = newId; });
+        opsQueue.forEach(q => {
+            if (q.t === 'insOrder' && q.order.client_id === oldId) q.order.client_id = newId;
+            if (q.t === 'insTx' && q.row.entity_type === 'client' && q.row.entity_id === oldId) q.row.entity_id = newId;
+        });
+    } else if (type === 'insSupplier') {
+        const local = suppliers.find(x => x.id === oldId);
+        if (local) local.id = newId;
+        orders.forEach(o => o.items.forEach(i => { if (i.supplier_id === oldId) i.supplier_id = newId; }));
+        opsQueue.forEach(q => {
+            if (q.t === 'insOrder') (q.items || []).forEach(i => { if (i.supplier_id === oldId) i.supplier_id = newId; });
+            if (q.t === 'insTx' && q.row.entity_type === 'supplier' && q.row.entity_id === oldId) q.row.entity_id = newId;
+        });
+    } else if (type === 'insTx') {
+        const local = transactions.find(x => x.id === oldId);
+        if (local) local.id = newId;
+    }
+    saveOps();
+}
 // Soft-delete: помечаем deleted_at (можно восстановить), физически не удаляем.
 async function sbDeleteSupplier(s) {
     const ok = await sbUpdate('suppliers', s, { deleted_at: new Date().toISOString() }, 'удаление поставщика');
