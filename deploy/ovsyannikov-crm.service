@@ -1,0 +1,22 @@
+[Unit]
+Description=Ovsyannikov CRM API
+After=network.target
+
+[Service]
+Type=simple
+User=crm
+Group=crm
+Environment=CRM_DB=/var/lib/ovsyannikov-crm/crm.db
+Environment=CRM_HOST=127.0.0.1
+Environment=CRM_PORT=8765
+ExecStart=/usr/bin/python3 /opt/ovsyannikov-crm/backend/server.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ovsyannikov-crm
+
+[Install]
+WantedBy=multi-user.target

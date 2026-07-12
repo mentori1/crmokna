@@ -228,12 +228,8 @@ function formatPhoneRu(raw) {
     return out;
 }
 async function sbReplaceItems(orderId, items) {
-    await SB.from('order_items').delete().eq('order_id', orderId);
-    if (items && items.length) {
-        const { error } = await SB.from('order_items')
-            .insert(items.map(i => ({ ...i, order_id: orderId })));
-        dbErr('позиции заказа', error);
-    }
+    const { error } = await SB.rpc('replace_order_items', { p_order_id: orderId, p_items: items || [] });
+    dbErr('позиции заказа', error);
 }
 function sbInsertTransaction(t) { enqueueOp({ t: 'insTx', row: t }); }
 function sbInsertClient(c) { enqueueOp({ t: 'insClient', row: c }); }
@@ -2796,6 +2792,34 @@ async function loadData() {
 // При изменении данных другим пользователем локальные массивы обновляются
 // и активный раздел перерисовывается — без перезагрузки страницы.
 function subscribeRealtime() {
+    if (typeof SB.onRevision === 'function') {
+        let refreshing = false;
+        SB.onRevision(async () => {
+            if (refreshing || document.hidden) return;
+            refreshing = true;
+            try {
+                const [c, s, ordRaw, t] = await Promise.all([
+                    fetchAll('clients'), fetchAll('suppliers'),
+                    fetchAll('orders', '*, order_items(*)'), fetchAll('transactions'),
+                ]);
+                clients = c;
+                suppliers = s;
+                transactions = t.map(x => ({ ...x, amount: +x.amount }));
+                orders = ordRaw.map(o => {
+                    const items = (o.order_items || []).map(i => ({
+                        product_name: i.product_name, dimensions: i.dimensions || '',
+                        supplier_id: i.supplier_id, quantity: +i.quantity,
+                        purchase_price: +i.purchase_price, sale_price: +i.sale_price,
+                    }));
+                    const { order_items, ...rest } = o;
+                    return { ...rest, items };
+                });
+                renderSection(location.hash.replace('#', '') || 'dashboard');
+            } catch (e) { console.warn('sync', e); }
+            finally { refreshing = false; }
+        });
+        return;
+    }
     const tables = ['clients', 'suppliers', 'orders', 'transactions'];
     const map = () => ({ clients, suppliers, orders, transactions });
     tables.forEach(table => {

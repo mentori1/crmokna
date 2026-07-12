@@ -20,12 +20,16 @@ SR_KEY = (BASE / ".sr_key").read_text().strip()
 PROJECT_URL = f"https://{REF}.supabase.co"
 OUT_ROOT = Path.home() / "mentori-backups" / "ovsyannikov-crm"
 KEEP = 30
-TABLES = ["clients", "suppliers", "orders", "order_items", "transactions", "audit_log"]
+TABLES = [
+    "clients", "suppliers", "orders", "order_items", "transactions",
+    "product_custom", "product_hidden", "audit_log",
+]
 
 def fetch_all(table):
     rows, frm, size = [], 0, 1000
+    order_col = "name" if table in {"product_custom", "product_hidden"} else "id"
     while True:
-        url = f"{PROJECT_URL}/rest/v1/{table}?select=*&order=id.asc&offset={frm}&limit={size}"
+        url = f"{PROJECT_URL}/rest/v1/{table}?select=*&order={order_col}.asc&offset={frm}&limit={size}"
         req = urllib.request.Request(url, headers={
             "apikey": SR_KEY, "Authorization": f"Bearer {SR_KEY}",
             "User-Agent": "crm-backup/1.0",
