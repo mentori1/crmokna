@@ -151,8 +151,7 @@ async function execOp(op) {
                 if (op._orderRef) op._orderRef.id = op.order.id;
                 throw error;
             }
-            if (isNetworkError(error)) throw error;
-            return 'drop';
+            throw error;
         }
         if (data && op._orderRef) op._orderRef.id = data;  // серверный id заказа
         return 'ok';
@@ -160,7 +159,7 @@ async function execOp(op) {
     if (op.t === 'insTx' || op.t === 'insClient' || op.t === 'insSupplier') {
         const table = { insTx: 'transactions', insClient: 'clients', insSupplier: 'suppliers' }[op.t];
         const { error } = await SB.from(table).insert(op.row);
-        if (error) { if (isNetworkError(error)) throw error; return 'drop'; }
+        if (error) throw error;
         return 'ok';
     }
     return 'drop';
@@ -175,8 +174,21 @@ async function processOps() {
             await execOp(op);
             opsQueue.shift(); saveOps();
         } catch (e) {
+            // Ошибки схемы/RLS/ограничений сами не исчезнут. Не удаляем такую
+            // операцию из localStorage и не показываем ложное «Сохранено».
+            if (!isNetworkError(e) && e.code !== '23505') {
+                opsProcessing = false;
+                console.error('Операция осталась в очереди:', op, e);
+                dbToast(`Не сохранено — операция оставлена в очереди (${e.message || e.code || 'ошибка базы'})`, false);
+                return;
+            }
             op.retries = (op.retries || 0) + 1;
-            if (op.retries > 8) { opsQueue.shift(); saveOps(); dbToast('Не сохранено после нескольких попыток', false); continue; }
+            if (op.retries > 8) {
+                opsProcessing = false;
+                saveOps();
+                dbToast('Не сохранено — операция остаётся в очереди для повторной отправки', false);
+                return;
+            }
             const delay = Math.min(300000, 5000 * Math.pow(3, op.retries - 1));
             opsProcessing = false;
             dbToast(`Нет связи — повтор через ${Math.round(delay / 1000)}с (в очереди: ${opsQueue.length})`, false);
@@ -259,16 +271,6 @@ const STATUS_COMPAT = {
     delivering:            'Доставляется',
 };
 const statusLabel = s => STATUS_LABELS[s] || STATUS_COMPAT[s] || s || '—';
-
-// Статусы доставки (раздел «Доставка»)
-const DELIVERY_STATUS_LABELS = {
-    none:             'Не назначен',
-    car_going:        'Машина едет за грузом',
-    shipped_supplier: 'Груз отгружен',
-    at_warehouse:     'Груз на складе',
-    sent_client:      'Отправлен клиенту',
-    received:         'Получен клиентом'
-};
 
 let clients = [];
 
@@ -597,6 +599,7 @@ const navItems = document.querySelectorAll('.nav-item');
 const sections = document.querySelectorAll('.section');
 
 function navigate(sectionId) {
+    if (!document.getElementById('section-' + sectionId)) sectionId = 'dashboard';
     navItems.forEach(n => n.classList.toggle('active', n.dataset.section === sectionId));
     sections.forEach(s => s.classList.toggle('active', s.id === 'section-' + sectionId));
     if (location.hash !== '#' + sectionId) location.hash = sectionId;
@@ -648,7 +651,6 @@ function renderSection(id) {
     switch (id) {
         case 'dashboard':  renderDashboard(); break;
         case 'orders':     renderOrders(); break;
-        case 'delivery':   renderDelivery(); break;
         case 'clients':    renderClients(); break;
         case 'suppliers':  renderSuppliers(); break;
         case 'finances':   renderFinances(); break;
@@ -987,85 +989,6 @@ function renderOrders() {
 document.getElementById('filterStatus').addEventListener('change', renderOrders);
 document.getElementById('filterDateFrom').addEventListener('change', renderOrders);
 document.getElementById('filterDateTo').addEventListener('change', renderOrders);
-
-
-// ─── Delivery ────────────────────────────────────────────────
-
-function renderDelivery() {
-    // Открытые заказы = ещё не закрытые
-    const openOrders = orders.filter(o => o.status !== 'closed');
-    const filter = document.getElementById('filterDeliveryStatus').value;
-
-    let rows = openOrders;
-    if (filter) {
-        rows = rows.filter(o => (o.delivery_status || 'none') === filter);
-    }
-    rows = rows.sort((a, b) => b.created_at.localeCompare(a.created_at));
-
-    // Метрики по статусам доставки
-    const counts = { none: 0, car_going: 0, shipped_supplier: 0, at_warehouse: 0, sent_client: 0, received: 0 };
-    openOrders.forEach(o => { counts[o.delivery_status || 'none']++; });
-    document.getElementById('deliveryMetrics').innerHTML = `
-        <div class="metric-card blue">
-            <div class="metric-label">Открытых заказов</div>
-            <div class="metric-value">${openOrders.length}</div>
-        </div>
-        <div class="metric-card amber">
-            <div class="metric-label">В пути / отгружено</div>
-            <div class="metric-value">${counts.car_going + counts.shipped_supplier}</div>
-        </div>
-        <div class="metric-card cyan">
-            <div class="metric-label">На складе</div>
-            <div class="metric-value">${counts.at_warehouse}</div>
-        </div>
-        <div class="metric-card green">
-            <div class="metric-label">Отправлено клиенту</div>
-            <div class="metric-value">${counts.sent_client + counts.received}</div>
-        </div>
-    `;
-
-    document.getElementById('deliveryBody').innerHTML = rows.length ? rows.map(o => {
-        const ds = o.delivery_status || 'none';
-        const product = o.items.map(i => i.product_name).join(', ');
-        const supplierIds = [...new Set(o.items.map(i => i.supplier_id).filter(Boolean))];
-        return `<tr data-order="${o.id}" style="cursor:pointer">
-            <td class="td-bold" data-label="№ заказа">${o.order_number}</td>
-            <td data-label="Дата">${fmtDate(o.created_at)}</td>
-            <td data-label="Клиент">${clientName(o.client_id)}<br><span class="text-muted" style="font-size:12px">${clientPhone(o.client_id)}</span></td>
-            <td data-label="Продукция">${product}</td>
-            <td data-label="Поставщик">${supplierIds.map(supplierName).join(', ') || '—'}</td>
-            <td data-label="Статус доставки">
-                <select class="delivery-select" data-order="${o.id}" onclick="event.stopPropagation()">
-                    ${Object.entries(DELIVERY_STATUS_LABELS).map(([k, v]) =>
-                        `<option value="${k}" ${ds === k ? 'selected' : ''}>${v}</option>`).join('')}
-                </select>
-            </td>
-        </tr>`;
-    }).join('') : '<tr><td colspan="6" class="empty-state">Нет открытых заказов</td></tr>';
-
-    // Клик по строке — открыть карточку заказа.
-    // Клик по выпадающему списку статуса НЕ открывает карточку (иначе на телефоне
-    // тап по списку открывал заказ вместо смены статуса).
-    document.querySelectorAll('#deliveryBody tr[data-order]').forEach(tr => {
-        tr.addEventListener('click', (e) => {
-            if (e.target.closest('.delivery-select')) return;
-            openOrderDetail(+tr.dataset.order);
-        });
-    });
-
-    document.querySelectorAll('.delivery-select').forEach(sel => {
-        sel.addEventListener('change', (e) => {
-            e.stopPropagation();
-            const o = orders.find(x => x.id === +sel.dataset.order);
-            if (o) { o.delivery_status = sel.value === 'none' ? null : sel.value; sbUpdateOrder(o, { delivery_status: o.delivery_status }); }
-            // Перерисовку откладываем, чтобы нативный список на телефоне успел
-            // зафиксировать выбор до пересборки строки.
-            setTimeout(renderDelivery, 0);
-        });
-    });
-}
-
-document.getElementById('filterDeliveryStatus').addEventListener('change', renderDelivery);
 
 
 // ─── Order Detail Modal ──────────────────────────────────────

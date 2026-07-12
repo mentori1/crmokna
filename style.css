@@ -82,13 +82,13 @@ body.modal-open { overflow: hidden; }
     border-right: 1px solid rgba(255,255,255,.06);
 }
 
-/* Лого — стеклянная плашка со знаком окна */
+/* Компактный архитектурный бренд-блок */
 .sidebar-logo {
     display: flex;
     align-items: center;
     gap: 12px;
     margin: 16px 14px 22px;
-    padding: 14px 14px;
+    padding: 13px 12px;
     border-radius: 14px;
     background: rgba(255,255,255,.045);
     border: 1px solid rgba(255,255,255,.09);
@@ -98,16 +98,26 @@ body.modal-open { overflow: hidden; }
 }
 .logo-mark {
     flex-shrink: 0;
-    width: 38px; height: 38px;
+    width: 42px; height: 42px;
     display: flex; align-items: center; justify-content: center;
-    border-radius: 10px;
-    background: linear-gradient(135deg, var(--blue-500), var(--blue-700));
+    border-radius: 12px;
+    background: linear-gradient(145deg, #3b82f6 0%, #1d4ed8 58%, #172554 100%);
     color: #fff;
     box-shadow: 0 4px 12px rgba(37,99,235,.4);
 }
-.logo-mark svg { width: 21px; height: 21px; }
+.logo-mark::after {
+    content: ''; position: absolute; width: 26px; height: 1px;
+    transform: translateY(18px); background: linear-gradient(90deg, transparent, #fbbf24, transparent);
+}
+.logo-mark { position: relative; }
+.logo-mark svg { width: 29px; height: 29px; }
+.logo-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.logo-kicker {
+    font-size: 9px; font-weight: 800; letter-spacing: 1.8px;
+    color: #93c5fd; line-height: 1;
+}
 .logo-text {
-    font-size: 15px; font-weight: 700; line-height: 1.15;
+    font-size: 14px; font-weight: 700; line-height: 1.15;
     letter-spacing: -.2px; color: #fff;
 }
 
@@ -685,20 +695,24 @@ body.modal-open { overflow: hidden; }
 }
 .order-status-select:hover { border-color: rgba(0,0,0,.12); }
 
-/* Заказы: фиксированная раскладка — всё влезает, телефон не переносится */
-#ordersTable { table-layout: fixed; }
+/* Заказы: пропорциональная раскладка использует всю ширину без пустого провала */
+#ordersTable { table-layout: fixed; width: 100%; min-width: 1000px; }
 #ordersTable th, #ordersTable td { padding-left: 9px; padding-right: 9px; }
-#ordersTable th:nth-child(1),  #ordersTable td:nth-child(1)  { width: 80px;  white-space: nowrap; }   /* Дата */
-#ordersTable th:nth-child(2),  #ordersTable td:nth-child(2)  { width: 94px;  word-break: break-word; } /* № заказа */
-#ordersTable th:nth-child(3),  #ordersTable td:nth-child(3)  { width: 90px;  word-break: break-word; } /* Поставщик */
-#ordersTable th:nth-child(4),  #ordersTable td:nth-child(4)  { width: 82px; }   /* Закупка */
-#ordersTable th:nth-child(5),  #ordersTable td:nth-child(5)  { width: 82px; }   /* Продажа */
-#ordersTable th:nth-child(6),  #ordersTable td:nth-child(6)  { width: 84px; }   /* Получено */
-#ordersTable th:nth-child(7),  #ordersTable td:nth-child(7)  { width: 84px; }   /* Осталось */
-#ordersTable th:nth-child(8),  #ordersTable td:nth-child(8)  { width: 104px; }  /* Статус */
-#ordersTable td:nth-child(9)   { word-break: break-word; }                      /* Клиент (остаток) */
-#ordersTable th:nth-child(10), #ordersTable td:nth-child(10) { width: 132px; white-space: nowrap; }   /* Телефон */
-#ordersTable th:nth-child(11), #ordersTable td:nth-child(11) { width: 92px; white-space: nowrap; padding-right: 12px; }   /* Открыть */
+#ordersTable th:nth-child(1),  #ordersTable td:nth-child(1)  { width: 7%; white-space: nowrap; }
+#ordersTable th:nth-child(2),  #ordersTable td:nth-child(2)  { width: 8%; word-break: break-word; }
+#ordersTable th:nth-child(3),  #ordersTable td:nth-child(3)  { width: 9%; word-break: break-word; }
+#ordersTable th:nth-child(4),  #ordersTable td:nth-child(4)  { width: 7%; }
+#ordersTable th:nth-child(5),  #ordersTable td:nth-child(5)  { width: 7%; }
+#ordersTable th:nth-child(6),  #ordersTable td:nth-child(6)  { width: 8%; }
+#ordersTable th:nth-child(7),  #ordersTable td:nth-child(7)  { width: 7%; }
+#ordersTable th:nth-child(8),  #ordersTable td:nth-child(8)  { width: 10%; }
+#ordersTable th:nth-child(9),  #ordersTable td:nth-child(9)  { width: 17%; word-break: break-word; }
+#ordersTable th:nth-child(10), #ordersTable td:nth-child(10) { width: 12%; white-space: nowrap; }
+#ordersTable th:nth-child(11), #ordersTable td:nth-child(11) { width: 8%; white-space: nowrap; padding-right: 12px; }
+#ordersTable th:nth-child(9), #ordersTable td:nth-child(9),
+#ordersTable th:nth-child(10), #ordersTable td:nth-child(10) {
+    border-left: 1px solid var(--slate-200);
+}
 
 .badge-income  { background: var(--green-100); color: var(--green-700); }
 .badge-expense { background: var(--red-100);   color: var(--red-600); }
@@ -911,6 +925,10 @@ body.modal-open { overflow: hidden; }
 @media (max-width: 560px) {
     html { font-size: 15px; }
 
+    #ordersTable { min-width: 0; }
+    #ordersTable th:nth-child(9), #ordersTable td:nth-child(9),
+    #ordersTable th:nth-child(10), #ordersTable td:nth-child(10) { border-left: none; }
+
     .content { padding: 12px; }
     .section-title { font-size: 18px; margin-bottom: 14px; }
 
@@ -992,7 +1010,6 @@ body.modal-open { overflow: hidden; }
     .data-table tbody td[data-label=""] { padding-top: 10px; }
     .data-table tbody td[data-label=""]::before { display: none; }
     .data-table tbody td[data-label=""] .btn { width: 100%; }
-    .data-table tbody td[data-label=""] .delivery-select { width: 100%; }
     /* Несколько кнопок действий на мобиле — в столбик во всю ширину */
     .data-table tbody td.row-actions { flex-direction: column; gap: 8px; align-items: stretch; }
     /* Пустые ячейки (например пустой приход/расход) — скрываем */
@@ -1066,8 +1083,6 @@ body.modal-open { overflow: hidden; }
     .payment-form { grid-template-columns: 1fr; gap: 11px; }
     .payment-submit { width: 100%; height: 46px; }
 
-    .delivery-select { max-width: 100%; width: 100%; font-size: 13px; padding: 8px; }
-
     /* Кнопки «+ Добавить позицию» / «+ Платёж» */
     .modal-body .btn-sm { padding: 10px 14px; font-size: 14px; height: auto; }
 
@@ -1135,25 +1150,6 @@ body.modal-open { overflow: hidden; }
 .order-item-row .item-remove {
     height: 38px; padding: 0;
     display: flex; align-items: center; justify-content: center;
-}
-
-/* ─── Delivery select ─────────────────────────────────── */
-
-.delivery-select {
-    padding: 5px 8px;
-    border: 1px solid var(--slate-300);
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 500;
-    background: #fff;
-    color: var(--slate-700);
-    outline: none;
-    cursor: pointer;
-    max-width: 180px;
-}
-.delivery-select:focus {
-    border-color: var(--blue-500);
-    box-shadow: 0 0 0 3px rgba(59,130,246,.12);
 }
 
 /* ─── Login screen (демо-версия) ──────────────────────── */
