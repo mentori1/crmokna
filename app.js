@@ -144,6 +144,7 @@ function isNetworkError(err) {
 // Выполнить операцию. Вернёт 'ok'|'drop'; при сетевой ошибке — throw (ретрай).
 async function execOp(op) {
     if (op.t === 'insOrder') {
+        const provisionalId = op.order.id;
         const { data, error } = await SB.rpc('create_order', { p_order: op.order, p_items: op.items || [] });
         if (error) {
             if (error.code === '23505') {           // коллизия id — перегенерируем и повторим
@@ -153,7 +154,7 @@ async function execOp(op) {
             }
             throw error;
         }
-        if (data && op._orderRef) op._orderRef.id = data;  // серверный id заказа
+        if (data && data !== provisionalId) rebindOrderId(provisionalId, data, op._orderRef);
         return 'ok';
     }
     if (op.t === 'insTx' || op.t === 'insClient' || op.t === 'insSupplier') {
@@ -164,6 +165,10 @@ async function execOp(op) {
         if (saved && saved.id != null && saved.id !== op.row.id) {
             rebindLocalId(op.t, op.row.id, saved.id, op._rowRef);
             op.row.id = saved.id;
+        }
+        if (op.t === 'insTx' && op._rowRef) {
+            op._rowRef._pending = false;
+            rerenderActiveSection();
         }
         return 'ok';
     }
@@ -267,15 +272,27 @@ function rebindLocalId(type, oldId, newId, rowRef) {
     }
     saveOps();
 }
+
+function rebindOrderId(oldId, newId, orderRef) {
+    if (orderRef) orderRef.id = newId;
+    const local = orders.find(o => o.id === oldId);
+    if (local) local.id = newId;
+    transactions.forEach(t => { if (t.order_id === oldId) t.order_id = newId; });
+    opsQueue.forEach(q => {
+        if (q.t === 'insTx' && q.row.order_id === oldId) q.row.order_id = newId;
+    });
+    saveOps();
+}
 // Soft-delete: помечаем deleted_at (можно восстановить), физически не удаляем.
 async function sbDeleteSupplier(s) {
     const ok = await sbUpdate('suppliers', s, { deleted_at: new Date().toISOString() }, 'удаление поставщика');
     if (ok) dbToast('Поставщик удалён', true);
 }
 async function sbDeleteOrder(o) {
-    const ok = await sbUpdate('orders', o, { deleted_at: new Date().toISOString() }, 'удаление заказа');
-    if (ok) dbToast('Заказ удалён', true);
-    return ok;
+    const { data, error } = await SB.rpc('delete_order', { p_order_id: o.id, p_version: o.version ?? 1 });
+    if (error) { dbErr('удаление заказа', error); return false; }
+    dbToast(`Заказ удалён вместе с платежами (${data?.transactions || 0})`, true);
+    return true;
 }
 
 
@@ -326,7 +343,7 @@ function calcOrder(o) {
                  paidByClient: totalSale, paidToSupplier: totalPurchase,
                  clientDebt: 0, supplierDebt: 0 };
     }
-    const txs = transactions.filter(t => t.order_id === o.id);
+    const txs = transactions.filter(t => t.order_id === o.id && !t._pending);
     const paidByClient = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
     const paidToSupplier = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
     return { totalPurchase, totalSale, margin, paidByClient, paidToSupplier,
@@ -1026,7 +1043,7 @@ function openOrderDetail(orderId) {
     if (!o) return;
     const c = calcOrder(o);
     const client = clients.find(x => x.id === o.client_id) || {};
-    const supplierIds = [...new Set(o.items.map(i => i.supplier_id))];
+    const supplierIds = [...new Set(o.items.map(i => i.supplier_id).filter(Boolean))];
 
     openModal('Заказ ' + (o.order_number || crmId(o)), `
         <div class="detail-grid">
@@ -1147,9 +1164,15 @@ function openOrderDetail(orderId) {
             </div>
             <div class="form-group">
                 <label>Тип</label>
-                <select id="paymentType">
+                <select id="paymentType" onchange="togglePaymentSupplier()">
                     <option value="income">Оплата от клиента</option>
                     <option value="expense">Оплата поставщику</option>
+                </select>
+            </div>
+            <div class="form-group" id="paymentSupplierWrap" style="display:none">
+                <label>Поставщик заказа</label>
+                <select id="paymentSupplier">
+                    ${supplierIds.map(id => `<option value="${id}">${supplierName(id)}</option>`).join('')}
                 </select>
             </div>
             <div class="form-group">
@@ -1282,15 +1305,18 @@ window.saveOrderEdit = function(orderId) {
     if (active) renderSection(active.dataset.section);
 };
 
-// Удаление ошибочного заказа (soft-delete — можно восстановить из бэкапа)
+// Удаление ошибочного заказа вместе со всеми его позициями и платежами.
 window.deleteOrder = async function(orderId) {
     const o = orders.find(x => x.id === orderId);
     if (!o) return;
-    if (!confirm(`Удалить заказ ${o.order_number}? Платежи по нему останутся в истории.`)) return;
+    const relatedPayments = transactions.filter(t => t.order_id === orderId).length;
+    const label = o.order_number || crmId(o);
+    if (!confirm(`Удалить заказ ${label}?\n\nБудут также удалены все позиции и связанные платежи: ${relatedPayments}.`)) return;
     const ok = await sbDeleteOrder(o);
     if (!ok) return;
     const idx = orders.findIndex(x => x.id === orderId);
     if (idx !== -1) orders.splice(idx, 1);
+    transactions = transactions.filter(t => t.order_id !== orderId);
     closeModal();
     navigate('orders');
 };
@@ -1311,6 +1337,15 @@ function rerenderActiveSection() {
     if (active) renderSection(active.dataset.section);
 }
 
+function paymentRemaining(order, type, supplierId = null) {
+    if (type === 'income') return calcOrder(order).clientDebt;
+    const purchase = order.items.filter(i => i.supplier_id === supplierId)
+        .reduce((sum, i) => sum + i.purchase_price * i.quantity, 0);
+    const paid = transactions.filter(t => !t._pending && t.order_id === order.id &&
+        t.type === 'expense' && t.entity_id === supplierId).reduce((sum, t) => sum + t.amount, 0);
+    return purchase - paid;
+}
+
 // Добавить платёж (от клиента или поставщику) к заказу
 window.addPayment = function(orderId) {
     const o = orders.find(x => x.id === orderId);
@@ -1319,7 +1354,14 @@ window.addPayment = function(orderId) {
     if (!amount || amount <= 0) { alert('Укажите сумму платежа'); return; }
     const type = document.getElementById('paymentType').value;
     const desc = document.getElementById('paymentDesc').value.trim() || (type === 'income' ? 'Оплата от клиента' : 'Оплата поставщику');
-    const supplierId = o.items.find(i => i.supplier_id)?.supplier_id;
+    const supplierId = type === 'expense' ? +document.getElementById('paymentSupplier')?.value : null;
+    if (type === 'expense' && !supplierId) { alert('В заказе не указан поставщик'); return; }
+
+    const remaining = paymentRemaining(o, type, supplierId);
+    if (amount > remaining + 0.0001) {
+        alert(`Сумма больше остатка к оплате (${fmtCur(Math.max(0, remaining))})`);
+        return;
+    }
 
     const newId = transactions.length ? Math.max(...transactions.map(t => t.id)) + 1 : 1;
     const tx = {
@@ -1331,12 +1373,20 @@ window.addPayment = function(orderId) {
         order_id: o.id,
         amount: amount,
         description: desc,
+        idempotency_key: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(),
+        _pending: true,
     };
     transactions.push(tx);
     sbInsertTransaction(tx);        // сохраняем платёж в Supabase
     // Перерисовываем карточку (текущая модалка) И активную секцию под ней (Дашборд / Заказы / Финансы / Клиенты / Поставщики)
     openOrderDetail(o.id);
     rerenderActiveSection();
+};
+
+window.togglePaymentSupplier = function() {
+    const type = document.getElementById('paymentType')?.value;
+    const wrap = document.getElementById('paymentSupplierWrap');
+    if (wrap) wrap.style.display = type === 'expense' ? '' : 'none';
 };
 
 // ─── Заявка на производство ──────────────────────────────────
@@ -1604,14 +1654,30 @@ window.saveNewClient = function() {
 
 // ─── Suppliers ───────────────────────────────────────────────
 
+function supplierFinancials(supplierId) {
+    const sOrders = orders.filter(o => o.items.some(i => i.supplier_id === supplierId));
+    let totalPurchases = 0, paid = 0;
+    sOrders.forEach(o => {
+        const purchase = o.items.filter(i => i.supplier_id === supplierId)
+            .reduce((sum, i) => sum + i.purchase_price * i.quantity, 0);
+        totalPurchases += purchase;
+        if (o.settled) {
+            paid += purchase;
+        } else {
+            const orderSupplierIds = [...new Set(o.items.map(i => i.supplier_id).filter(Boolean))];
+            paid += transactions.filter(t => !t._pending && t.order_id === o.id && t.type === 'expense' &&
+                t.entity_type === 'supplier' &&
+                (t.entity_id === supplierId || orderSupplierIds.length === 1))
+                .reduce((sum, t) => sum + t.amount, 0);
+        }
+    });
+    return { sOrders, totalPurchases, paid, debt: Math.max(0, totalPurchases - paid) };
+}
+
 function renderSuppliers() {
     const rows = suppliers.map(s => {
-        const sOrders = orders.filter(o => o.items.some(i => i.supplier_id === s.id));
-        const totalPurchases = sOrders.reduce((sum, o) => {
-            return sum + o.items.filter(i => i.supplier_id === s.id).reduce((s2, i) => s2 + i.purchase_price * i.quantity, 0);
-        }, 0);
-        const paid = transactions.filter(t => t.entity_type === 'supplier' && t.entity_id === s.id).reduce((s2, t) => s2 + t.amount, 0);
-        return { ...s, orderCount: sOrders.length, totalPurchases, debt: Math.max(0, totalPurchases - paid) };
+        const f = supplierFinancials(s.id);
+        return { ...s, orderCount: f.sOrders.length, totalPurchases: f.totalPurchases, debt: f.debt };
     });
 
     document.getElementById('suppliersBody').innerHTML = rows.map(s => `
@@ -1656,13 +1722,9 @@ window.deleteSupplier = function(supplierId) {
 window.openSupplierDetail = function(supplierId) {
     const s = suppliers.find(x => x.id === supplierId);
     if (!s) return;
-    const sOrders = orders.filter(o => o.items.some(i => i.supplier_id === s.id))
-        .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));   // новые сверху
-    const totalPurchases = sOrders.reduce((sum, o) => {
-        return sum + o.items.filter(i => i.supplier_id === s.id).reduce((s2, i) => s2 + i.purchase_price * i.quantity, 0);
-    }, 0);
-    const paid = transactions.filter(t => t.entity_type === 'supplier' && t.entity_id === s.id).reduce((s2, t) => s2 + t.amount, 0);
-    const debt = Math.max(0, totalPurchases - paid);
+    const f = supplierFinancials(s.id);
+    const sOrders = f.sOrders.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    const { totalPurchases, paid, debt } = f;
 
     openModal('Поставщик: ' + s.name, `
         <div class="detail-grid">
@@ -1778,8 +1840,9 @@ window.saveSupplier = function(supplierId) {
 // ─── Finances ────────────────────────────────────────────────
 
 function renderFinances() {
-    const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-    const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    const savedTransactions = transactions.filter(t => !t._pending);
+    const totalIncome = savedTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const totalExpense = savedTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
 
     let totalClientDebt = 0, totalSupplierDebt = 0, totalRevenue = 0, totalProfit = 0;
     orders.forEach(o => {
@@ -1792,12 +1855,24 @@ function renderFinances() {
 
     document.getElementById('financeMetrics').innerHTML = `
         <div class="metric-card green">
-            <div class="metric-label">Выручка</div>
+            <div class="metric-label">Продажи по заказам</div>
             <div class="metric-value">${fmtCur(totalRevenue)}</div>
+            <div class="metric-sub">начислено, не равно оплатам</div>
         </div>
         <div class="metric-card cyan">
-            <div class="metric-label">Прибыль (маржа)</div>
+            <div class="metric-label">Маржа по заказам</div>
             <div class="metric-value">${fmtCur(totalProfit)}</div>
+            <div class="metric-sub">продажа минус закупка</div>
+        </div>
+        <div class="metric-card green">
+            <div class="metric-label">Получено от клиентов</div>
+            <div class="metric-value">${fmtCur(totalIncome)}</div>
+            <div class="metric-sub">фактические платежи</div>
+        </div>
+        <div class="metric-card red">
+            <div class="metric-label">Оплачено поставщикам</div>
+            <div class="metric-value">${fmtCur(totalExpense)}</div>
+            <div class="metric-sub">фактические платежи</div>
         </div>
         <div class="metric-card amber">
             <div class="metric-label">Дебиторская задолж.</div>
@@ -1813,7 +1888,7 @@ function renderFinances() {
 
     // Выбор: Все / Доходы / Расходы  +  разбивка по месяцам
     const type = window.finType || '';           // '', income, expense
-    const typed = type ? transactions.filter(t => t.type === type) : transactions;
+    const typed = type ? savedTransactions.filter(t => t.type === type) : savedTransactions;
 
     // Суммы по месяцам для выбранного типа
     const monthSum = {};
@@ -1855,17 +1930,21 @@ function renderFinances() {
     filtered.sort((a, b) => b.date.localeCompare(a.date));
 
     document.getElementById('financeBody').innerHTML = filtered.length ? filtered.map(t => {
-        const orderNum = t.order_id ? (orders.find(o => o.id === t.order_id) || {}).order_number || '' : '';
-        return `<tr>
+        const order = t.order_id ? orders.find(o => o.id === t.order_id) : null;
+        const orderNum = order ? (order.order_number || crmId(order)) : '—';
+        return `<tr ${order ? `data-order="${order.id}" style="cursor:pointer"` : ''}>
             <td data-label="Дата">${fmtDate(t.date)}</td>
             <td data-label="Тип"><span class="badge badge-${t.type}">${t.type === 'income' ? 'Приход' : 'Расход'}</span></td>
-            <td data-label="Контрагент">${entityName(t.entity_type, t.entity_id)}</td>
+            <td data-label="Контрагент">${t.entity_name || entityName(t.entity_type, t.entity_id)}</td>
             <td class="td-bold" data-label="Заказ">${orderNum}</td>
             <td class="font-mono text-right text-green" data-label="Приход">${t.type === 'income' ? fmtCur(t.amount) : ''}</td>
             <td class="font-mono text-right text-red" data-label="Расход">${t.type === 'expense' ? fmtCur(t.amount) : ''}</td>
             <td class="text-muted" data-label="Описание">${t.description}</td>
         </tr>`;
     }).join('') : '<tr><td colspan="7" class="empty-state">Нет операций</td></tr>';
+    document.querySelectorAll('#financeBody tr[data-order]').forEach(row => {
+        row.addEventListener('click', () => openOrderDetail(+row.dataset.order));
+    });
 }
 
 window.finType = window.finType || '';    // '', income, expense
@@ -1881,15 +1960,17 @@ document.querySelectorAll('#finTypeToggle .fin-tab').forEach(btn => {
 
 // Кнопка «+ Операция» в Финансах
 document.getElementById('btnNewTransaction').addEventListener('click', () => {
-    const allClients = clients.map(c => `<option value="client:${c.id}">${c.name}</option>`).join('');
-    const allSuppliers = suppliers.map(s => `<option value="supplier:${s.id}">${s.name}</option>`).join('');
+    const orderOptions = [...orders]
+        .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+        .map(o => `<option value="${o.id}">${o.order_number || crmId(o)} — ${clientName(o.client_id)}</option>`)
+        .join('');
     openModal('Новая финансовая операция', `
         <div class="form-grid">
             <div class="form-group">
                 <label>Тип операции</label>
-                <select id="txFormType">
+                <select id="txFormType" onchange="updateTxFormCounterparty()">
                     <option value="income">Приход (от клиента)</option>
-                    <option value="expense">Расход (поставщику)</option>
+                    <option value="expense">Оплата поставщику</option>
                 </select>
             </div>
             <div class="form-group">
@@ -1897,11 +1978,15 @@ document.getElementById('btnNewTransaction').addEventListener('click', () => {
                 <input type="date" id="txFormDate" value="${new Date().toISOString().slice(0,10)}">
             </div>
             <div class="form-group">
-                <label>Контрагент</label>
-                <select id="txFormEntity">
-                    <optgroup label="Клиенты">${allClients}</optgroup>
-                    <optgroup label="Поставщики">${allSuppliers}</optgroup>
+                <label>Заказ</label>
+                <select id="txFormOrder" onchange="updateTxFormCounterparty()">
+                    <option value="">Выберите заказ…</option>
+                    ${orderOptions}
                 </select>
+            </div>
+            <div class="form-group full" id="txFormCounterparty">
+                <label>Контрагент</label>
+                <div class="text-muted">Сначала выберите заказ</div>
             </div>
             <div class="form-group">
                 <label>Сумма ₽</label>
@@ -1919,21 +2004,51 @@ document.getElementById('btnNewTransaction').addEventListener('click', () => {
     `);
 });
 
+window.updateTxFormCounterparty = function() {
+    const orderId = +document.getElementById('txFormOrder')?.value;
+    const type = document.getElementById('txFormType')?.value;
+    const box = document.getElementById('txFormCounterparty');
+    const order = orders.find(o => o.id === orderId);
+    if (!box || !order) {
+        if (box) box.innerHTML = '<label>Контрагент</label><div class="text-muted">Сначала выберите заказ</div>';
+        return;
+    }
+    if (type === 'income') {
+        box.innerHTML = `<label>Клиент заказа</label><div class="detail-value">${clientName(order.client_id)}</div>`;
+        return;
+    }
+    const supplierIds = [...new Set(order.items.map(i => i.supplier_id).filter(Boolean))];
+    box.innerHTML = `<label>Поставщик заказа</label><select id="txFormSupplier">
+        ${supplierIds.map(id => `<option value="${id}">${supplierName(id)}</option>`).join('')}
+    </select>`;
+};
+
 window.saveNewTransaction = function() {
     const amount = parseFloat(document.getElementById('txFormAmount').value);
     if (!amount || amount <= 0) { alert('Укажите сумму'); return; }
     const type = document.getElementById('txFormType').value;
-    const [entityType, entityId] = document.getElementById('txFormEntity').value.split(':');
+    const orderId = +document.getElementById('txFormOrder').value;
+    const order = orders.find(o => o.id === orderId);
+    if (!order) { alert('Выберите существующий заказ'); return; }
+    const supplierId = type === 'expense' ? +document.getElementById('txFormSupplier')?.value : null;
+    if (type === 'expense' && !supplierId) { alert('В заказе не указан поставщик'); return; }
+    const remaining = paymentRemaining(order, type, supplierId);
+    if (amount > remaining + 0.0001) {
+        alert(`Сумма больше остатка к оплате (${fmtCur(Math.max(0, remaining))})`);
+        return;
+    }
     const newId = transactions.length ? Math.max(...transactions.map(t => t.id)) + 1 : 1;
     const tx = {
         id: newId,
         date: document.getElementById('txFormDate').value || new Date().toISOString().slice(0, 10),
         type: type,
-        entity_type: entityType,
-        entity_id: +entityId,
-        order_id: null,
+        entity_type: type === 'income' ? 'client' : 'supplier',
+        entity_id: type === 'income' ? order.client_id : supplierId,
+        order_id: order.id,
         amount: amount,
         description: document.getElementById('txFormDesc').value.trim() || '',
+        idempotency_key: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(),
+        _pending: true,
     };
     transactions.push(tx);
     sbInsertTransaction(tx);        // сохраняем операцию в Supabase
@@ -2115,69 +2230,78 @@ window.saveStockIn = function() {
 
 const searchInput = document.getElementById('globalSearch');
 const searchDropdown = document.getElementById('searchDropdown');
+const searchNorm = value => String(value ?? '').toLocaleLowerCase('ru-RU').replace(/ё/g, 'е');
+const searchHtml = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const searchRank = (value, q) => {
+    const text = searchNorm(value);
+    return text === q ? 0 : text.startsWith(q) ? 1 : text.includes(q) ? 2 : 9;
+};
 
 searchInput.addEventListener('input', () => {
-    const q = searchInput.value.trim().toLowerCase();
+    const q = searchNorm(searchInput.value.trim());
     if (q.length < 2) { searchDropdown.classList.remove('open'); return; }
 
-    let html = '';
-
+    let html = '', clientHtml = '', supplierHtml = '', productHtml = '';
     const qDigits = q.replace(/\D/g, '');
+
+    // Сначала показываем точные сущности — они не должны прятаться под десятками заказов.
+    const matchedClients = clients.filter(c =>
+        [clientLabel(c), c.email, c.address].some(v => searchNorm(v).includes(q)) ||
+        (qDigits && String(c.phone || '').replace(/\D/g, '').includes(qDigits))
+    ).sort((a, b) => searchRank(clientLabel(a), q) - searchRank(clientLabel(b), q)).slice(0, 8);
+    if (matchedClients.length) {
+        clientHtml += '<div class="search-group-title">Клиенты</div>';
+        matchedClients.forEach(c => {
+            clientHtml += `<div class="search-item" data-action="client" data-id="${c.id}">
+                <span class="search-item-main">${searchHtml(clientLabel(c))}</span>
+                <span class="search-item-sub">${searchHtml(c.phone || c.address)}</span>
+            </div>`;
+        });
+    }
+
+    const matchedSuppliers = suppliers.filter(s =>
+        [s.name, s.contact_person, s.email].some(v => searchNorm(v).includes(q)) ||
+        (qDigits && String(s.phone || '').replace(/\D/g, '').includes(qDigits))
+    ).sort((a, b) => searchRank(a.name, q) - searchRank(b.name, q)).slice(0, 8);
+    if (matchedSuppliers.length) {
+        supplierHtml += '<div class="search-group-title">Поставщики</div>';
+        matchedSuppliers.forEach(s => {
+            supplierHtml += `<div class="search-item" data-action="supplier" data-id="${s.id}">
+                <span class="search-item-main">${searchHtml(s.name)}</span>
+                <span class="search-item-sub">${searchHtml(s.phone || s.contact_person)}</span>
+            </div>`;
+        });
+    }
+
+    const matchedProductNames = getProductNameSuggestions().filter(name => searchNorm(name).includes(q))
+        .sort((a, b) => searchRank(a, q) - searchRank(b, q) || a.localeCompare(b, 'ru')).slice(0, 8);
+    if (matchedProductNames.length) {
+        productHtml += '<div class="search-group-title">Продукция</div>';
+        matchedProductNames.forEach(name => {
+            productHtml += `<div class="search-item" data-action="catalog-product" data-name="${encodeURIComponent(name)}">
+                <span class="search-item-main">${searchHtml(name)}</span>
+                <span class="search-item-sub">${searchHtml(productCategory(name))}</span>
+            </div>`;
+        });
+    }
+
+    html = supplierHtml + productHtml + clientHtml;
+
     const matchedOrders = orders.filter(o =>
-        o.order_number.toLowerCase().includes(q) ||
-        crmId(o).toLowerCase().includes(q) ||
-        clientName(o.client_id).toLowerCase().includes(q) ||
+        searchNorm(o.order_number).includes(q) ||
+        searchNorm(crmId(o)).includes(q) ||
+        searchNorm(clientName(o.client_id)).includes(q) ||
         (qDigits && clientPhone(o.client_id).replace(/\D/g, '').includes(qDigits)) ||
-        o.items.some(i => (i.product_name || '').toLowerCase().includes(q)) ||
-        (o.production_number && String(o.production_number).toLowerCase().includes(q))
+        o.items.some(i => searchNorm(i.product_name).includes(q) || searchNorm(supplierName(i.supplier_id)).includes(q)) ||
+        searchNorm(o.production_number).includes(q) || searchNorm(o.notes).includes(q)
     ).slice(0, 8);
     if (matchedOrders.length) {
         html += '<div class="search-group-title">Заказы</div>';
         matchedOrders.forEach(o => {
             const product = o.items.map(i => i.product_name).filter(Boolean).join(', ');
             html += `<div class="search-item" data-action="order" data-id="${o.id}">
-                                <span class="search-item-main">${o.order_number} — ${clientName(o.client_id)}<br><span class="text-muted" style="font-size:12px">${product.slice(0, 50)}</span></span>
+                <span class="search-item-main">${searchHtml(o.order_number || crmId(o))} — ${searchHtml(clientName(o.client_id))}<br><span class="text-muted" style="font-size:12px">${searchHtml(product.slice(0, 50))}</span></span>
                 <span class="search-item-sub"><span class="badge badge-${o.status}">${statusLabel(o.status)}</span></span>
-            </div>`;
-        });
-    }
-
-    const matchedClients = clients.filter(c =>
-        c.name.toLowerCase().includes(q) ||
-        (qDigits && c.phone.replace(/\D/g, '').includes(qDigits))   // без цифр includes('') давал ВСЕХ
-    ).slice(0, 8);
-    if (matchedClients.length) {
-        html += '<div class="search-group-title">Клиенты</div>';
-        matchedClients.forEach(c => {
-            html += `<div class="search-item" data-action="client" data-id="${c.id}">
-                                <span class="search-item-main">${c.name}</span>
-                <span class="search-item-sub">${c.phone}</span>
-            </div>`;
-        });
-    }
-
-    const matchedProducts = products.filter(p =>
-        p.name.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q))
-    ).slice(0, 5);
-    if (matchedProducts.length) {
-        html += '<div class="search-group-title">Товары</div>';
-        matchedProducts.forEach(p => {
-            html += `<div class="search-item" data-action="product" data-id="${p.id}">
-                                <span class="search-item-main">${p.name}</span>
-                <span class="search-item-sub">${p.sku}</span>
-            </div>`;
-        });
-    }
-
-    const matchedSuppliers = suppliers.filter(s =>
-        s.name.toLowerCase().includes(q) || (s.contact_person && s.contact_person.toLowerCase().includes(q))
-    ).slice(0, 3);
-    if (matchedSuppliers.length) {
-        html += '<div class="search-group-title">Поставщики</div>';
-        matchedSuppliers.forEach(s => {
-            html += `<div class="search-item" data-action="supplier" data-id="${s.id}">
-                                <span class="search-item-main">${s.name}</span>
-                <span class="search-item-sub">${s.phone}</span>
             </div>`;
         });
     }
@@ -2194,8 +2318,15 @@ searchInput.addEventListener('input', () => {
             searchInput.value = '';
             if (action === 'order') openOrderDetail(id);
             if (action === 'client') openClientDetail(id);
-            if (action === 'product') { navigate('warehouse'); openProductDetail(id); }
             if (action === 'supplier') openSupplierDetail(id);
+            if (action === 'catalog-product') {
+                const name = decodeURIComponent(el.dataset.name || '');
+                navigate('products');
+                window.productCat = 'all';
+                const input = document.getElementById('productSearch');
+                if (input) input.value = name;
+                renderProductCatalog();
+            }
         });
     });
 });

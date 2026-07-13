@@ -264,7 +264,7 @@ body.modal-open { overflow: hidden; }
     border: 1px solid var(--slate-200);
     border-radius: var(--radius);
     box-shadow: var(--shadow-lg);
-    max-height: 360px;
+    max-height: min(520px, calc(100vh - 90px));
     overflow-y: auto;
     z-index: 60;
 }

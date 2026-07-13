@@ -152,6 +152,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.create_order(payload, user)
         if path == "/api/rpc/replace_order_items":
             return self.replace_order_items(payload, user)
+        if path == "/api/rpc/delete_order":
+            return self.delete_order(payload, user)
         return self.send_json(404, {"error": "not found"})
 
     def login(self, payload):
@@ -211,6 +213,20 @@ class Handler(BaseHTTPRequestHandler):
                     limit = min(int(req.get("limit", 1000)), 5000)
                     offset = max(int(req.get("offset", 0)), 0)
                     rows = [row_dict(x) for x in conn.execute(f"select * from {table}{where} limit ? offset ?", (*params, limit, offset)).fetchall()]
+                    if table == "transactions" and rows:
+                        client_ids = {r["entity_id"] for r in rows if r.get("entity_type") == "client"}
+                        supplier_ids = {r["entity_id"] for r in rows if r.get("entity_type") == "supplier"}
+                        names = {}
+                        if client_ids:
+                            marks = ",".join("?" for _ in client_ids)
+                            for item in conn.execute(f"select id,name,address from clients where id in ({marks})", list(client_ids)):
+                                names[("client", item["id"])] = item["name"] or item["address"] or "Без имени"
+                        if supplier_ids:
+                            marks = ",".join("?" for _ in supplier_ids)
+                            for item in conn.execute(f"select id,name from suppliers where id in ({marks})", list(supplier_ids)):
+                                names[("supplier", item["id"])] = item["name"]
+                        for item in rows:
+                            item["entity_name"] = names.get((item.get("entity_type"), item.get("entity_id")))
                     if table == "orders" and req.get("nested_items"):
                         ids = [r["id"] for r in rows]
                         grouped = {oid: [] for oid in ids}
@@ -228,6 +244,14 @@ class Handler(BaseHTTPRequestHandler):
                     conn.execute("begin immediate")
                     for item in items:
                         clean = self.clean_row(conn, table, item, inserting=True, actor=user["id"])
+                        if table == "transactions":
+                            self.validate_transaction(conn, clean)
+                            key = clean.get("idempotency_key")
+                            if key:
+                                existing = conn.execute("select * from transactions where idempotency_key=?", (key,)).fetchone()
+                                if existing:
+                                    created.append(row_dict(existing))
+                                    continue
                         if table in {"clients", "suppliers", "transactions"} and clean.get("id") is not None:
                             occupied = conn.execute(f"select 1 from {table} where id=?", (clean["id"],)).fetchone()
                             if occupied:
@@ -245,6 +269,10 @@ class Handler(BaseHTTPRequestHandler):
                         return self.send_json(200, {"data": None})
                     clean = self.clean_row(conn, table, req.get("values") or {}, inserting=False, actor=user["id"])
                     clean.pop("id", None)
+                    if table == "transactions":
+                        merged = row_dict(old)
+                        merged.update(clean)
+                        self.validate_transaction(conn, merged)
                     if "version" in old.keys():
                         clean["version"] = old["version"] + 1
                         clean["updated_at"] = now()
@@ -293,6 +321,29 @@ class Handler(BaseHTTPRequestHandler):
             if "created_by" in columns:
                 clean.setdefault("created_by", actor)
         return clean
+
+    @staticmethod
+    def validate_transaction(conn, tx):
+        if tx.get("type") not in {"income", "expense"}:
+            raise ValueError("Некорректный тип финансовой операции")
+        if float(tx.get("amount") or 0) <= 0:
+            raise ValueError("Сумма финансовой операции должна быть больше нуля")
+        order_id = tx.get("order_id")
+        if order_id is None:
+            raise ValueError("Финансовая операция должна быть привязана к заказу")
+        order = conn.execute("select id,client_id from orders where id=? and deleted_at is null", (order_id,)).fetchone()
+        if not order:
+            raise ValueError("Нельзя добавить платёж: заказ удалён или не существует")
+        if tx["type"] == "income":
+            if tx.get("entity_type") != "client" or tx.get("entity_id") != order["client_id"]:
+                raise ValueError("Платёж клиента не соответствует клиенту заказа")
+        else:
+            supplier_ids = {row[0] for row in conn.execute(
+                "select distinct supplier_id from order_items where order_id=? and deleted_at is null and supplier_id is not null",
+                (order_id,),
+            )}
+            if tx.get("entity_type") != "supplier" or tx.get("entity_id") not in supplier_ids:
+                raise ValueError("Платёж поставщику не соответствует поставщику заказа")
 
     def create_order(self, req, user):
         order = dict(req.get("order") or {})
@@ -345,6 +396,54 @@ class Handler(BaseHTTPRequestHandler):
                 bump_revision(conn)
                 conn.commit()
             return self.send_json(200, {"data": True})
+        except Exception as exc:
+            return self.send_json(400, {"error": str(exc)})
+
+    def delete_order(self, req, user):
+        order_id = req.get("order_id")
+        version = req.get("version")
+        stamp = now()
+        try:
+            with db() as conn:
+                conn.execute("begin immediate")
+                order = conn.execute("select * from orders where id=? and deleted_at is null", (order_id,)).fetchone()
+                if not order:
+                    return self.send_json(200, {"data": {"order": 0, "items": 0, "transactions": 0}})
+                if version is not None and order["version"] != version:
+                    return self.send_json(409, {"error": "Заказ уже изменён другим пользователем", "code": "CONFLICT"})
+
+                tx_rows = [row_dict(x) for x in conn.execute(
+                    "select * from transactions where order_id=? and deleted_at is null", (order_id,)
+                ).fetchall()]
+                item_rows = [row_dict(x) for x in conn.execute(
+                    "select * from order_items where order_id=? and deleted_at is null", (order_id,)
+                ).fetchall()]
+
+                conn.execute(
+                    "update orders set deleted_at=?,updated_at=?,updated_by=?,version=version+1 where id=?",
+                    (stamp, stamp, user["id"], order_id),
+                )
+                conn.execute(
+                    "update transactions set deleted_at=?,updated_at=?,updated_by=?,version=version+1 where order_id=? and deleted_at is null",
+                    (stamp, stamp, user["id"], order_id),
+                )
+                conn.execute(
+                    "update order_items set deleted_at=?,updated_at=?,updated_by=?,version=version+1 where order_id=? and deleted_at is null",
+                    (stamp, stamp, user["id"], order_id),
+                )
+
+                new_order = row_dict(conn.execute("select * from orders where id=?", (order_id,)).fetchone())
+                audit(conn, "orders", "DELETE", row_dict(order), new_order, user["id"])
+                for old in tx_rows:
+                    new = dict(old, deleted_at=stamp, updated_at=stamp, updated_by=user["id"], version=(old.get("version") or 1) + 1)
+                    audit(conn, "transactions", "DELETE", old, new, user["id"])
+                audit(conn, "order_items", "DELETE_ORDER_ITEMS",
+                      {"order_id": order_id, "count": len(item_rows)}, None, user["id"])
+                bump_revision(conn)
+                conn.commit()
+                return self.send_json(200, {"data": {
+                    "order": 1, "items": len(item_rows), "transactions": len(tx_rows),
+                }})
         except Exception as exc:
             return self.send_json(400, {"error": str(exc)})
 

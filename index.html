@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Центр окон и дверей — CRM</title>
-    <link rel="stylesheet" href="style.css?v=51">
+    <link rel="stylesheet" href="style.css?v=54">
 </head>
 <body>
 
@@ -125,7 +125,7 @@
     <header class="topbar">
         <button class="sidebar-toggle" id="sidebarToggle">☰</button>
         <div class="search-box">
-            <input type="text" id="globalSearch" placeholder="Поиск по заказам, клиентам, телефону, товару…" autocomplete="off">
+                <input type="text" id="globalSearch" placeholder="Поиск: заказ, клиент, поставщик, продукция…" autocomplete="off">
             <div class="search-dropdown" id="searchDropdown"></div>
         </div>
         <div class="topbar-actions">
@@ -301,8 +301,8 @@
             </div>
             <div class="fin-toggle" id="finTypeToggle">
                 <button class="fin-tab active" data-fintype="">Все</button>
-                <button class="fin-tab" data-fintype="income">Доходы</button>
-                <button class="fin-tab" data-fintype="expense">Расходы</button>
+                <button class="fin-tab" data-fintype="income">Приходы</button>
+                <button class="fin-tab" data-fintype="expense">Оплаты поставщикам</button>
             </div>
             <div class="products-layout">
                 <aside class="product-cats" id="finMonths"></aside>
@@ -408,7 +408,7 @@
 </div>
 
 <script src="assets/chart.umd.min.js?v=4.5.0"></script>
-<script src="supabase-local.js?v=52"></script>
-<script src="app.js?v=53"></script>
+<script src="supabase-local.js?v=54"></script>
+<script src="app.js?v=55"></script>
 </body>
 </html>

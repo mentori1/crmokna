@@ -66,6 +66,7 @@
             rpc: (name, args) => {
                 if (name === 'create_order') return request('/api/rpc/create_order', { method: 'POST', body: JSON.stringify({ order: args.p_order, items: args.p_items }) });
                 if (name === 'replace_order_items') return request('/api/rpc/replace_order_items', { method: 'POST', body: JSON.stringify({ order_id: args.p_order_id, items: args.p_items }) });
+                if (name === 'delete_order') return request('/api/rpc/delete_order', { method: 'POST', body: JSON.stringify({ order_id: args.p_order_id, version: args.p_version }) });
                 return Promise.resolve({ data: null, error: { message: 'Unknown RPC', code: '404' } });
             },
             onRevision(handler) {
