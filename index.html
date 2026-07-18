@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Центр окон и дверей — CRM</title>
-    <link rel="stylesheet" href="style.css?v=60">
+    <link rel="stylesheet" href="style.css?v=61">
 </head>
 <body>
 
@@ -152,8 +152,20 @@
                 <button class="btn btn-primary no-print" id="btnPrintDelivery">Распечатать</button>
             </div>
             <p class="text-muted no-print" style="margin:-12px 0 20px">Сюда менеджер вручную добавляет заказы кнопкой «В доставку».</p>
-            <div class="delivery-print-meta">Лист доставки · <span id="deliveryPrintDate"></span></div>
-            <div class="table-wrapper">
+            <div class="delivery-print-document" aria-hidden="true">
+                <header class="delivery-print-heading">
+                    <div>
+                        <div class="delivery-print-brand">Центр окон и дверей</div>
+                        <h1>Лист доставки</h1>
+                    </div>
+                    <div class="delivery-print-meta">
+                        <span id="deliveryPrintDate"></span>
+                        <b id="deliveryPrintCount"></b>
+                    </div>
+                </header>
+                <div class="delivery-print-list" id="deliveryPrintCards"></div>
+            </div>
+            <div class="table-wrapper delivery-screen-table">
                 <table class="data-table" id="deliveryTable">
                     <thead>
                         <tr>
@@ -396,6 +408,6 @@
 </div>
 
 <script src="supabase-local.js?v=54"></script>
-<script src="app.js?v=60"></script>
+<script src="app.js?v=61"></script>
 </body>
 </html>

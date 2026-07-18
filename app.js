@@ -761,6 +761,8 @@ function renderDelivery() {
 
     const printDate = document.getElementById('deliveryPrintDate');
     if (printDate) printDate.textContent = new Date().toLocaleString('ru-RU', { dateStyle: 'long', timeStyle: 'short' });
+    const printCount = document.getElementById('deliveryPrintCount');
+    if (printCount) printCount.textContent = `Заказов: ${rows.length}`;
     const printButton = document.getElementById('btnPrintDelivery');
     if (printButton) printButton.disabled = rows.length === 0;
 
@@ -769,10 +771,10 @@ function renderDelivery() {
         const client = clients.find(x => x.id === o.client_id) || {};
         const label = o.order_number || crmId(o);
         return `<tr data-order="${o.id}" style="cursor:pointer">
-            <td class="td-bold" data-label="№ заказа">${label}</td>
+            <td class="td-bold" data-label="№ заказа">${htmlSafe(label)}</td>
             <td class="font-mono ${c.clientDebt > 0 ? 'text-red' : 'text-green'}" data-label="Осталось получить">${c.clientDebt > 0 ? fmtCur(c.clientDebt) : 'Оплачено'}</td>
-            <td data-label="Телефон">${client.phone || '—'}</td>
-            <td data-label="Адрес">${client.address || '—'}</td>
+            <td data-label="Телефон">${htmlSafe(client.phone || '—')}</td>
+            <td data-label="Адрес">${htmlSafe(client.address || '—')}</td>
             <td class="print-only" data-label="Состав заказа">${deliveryItemLines(o, 'is-print')}</td>
             <td data-label="" class="no-print row-actions delivery-actions">
                 <button class="btn btn-sm btn-delivery-items" onclick="event.stopPropagation();openDeliveryComposition(${o.id})">Состав</button>
@@ -780,6 +782,42 @@ function renderDelivery() {
             </td>
         </tr>`;
     }).join('') : '<tr><td colspan="6" class="empty-state">Пока ни один заказ не добавлен в доставку</td></tr>';
+
+    const printCards = document.getElementById('deliveryPrintCards');
+    if (printCards) {
+        printCards.innerHTML = rows.map(o => {
+            const c = calcOrder(o);
+            const client = clients.find(x => x.id === o.client_id) || {};
+            const label = o.order_number || crmId(o);
+            const remaining = c.clientDebt > 0 ? fmtCur(c.clientDebt) : 'Оплачено';
+            return `<article class="delivery-print-card">
+                <div class="delivery-print-card-head">
+                    <div class="delivery-print-order-number">
+                        <span>Заказ</span>
+                        <strong>${htmlSafe(label)}</strong>
+                    </div>
+                    <div class="delivery-print-balance">
+                        <span>Получить с клиента</span>
+                        <strong>${htmlSafe(remaining)}</strong>
+                    </div>
+                </div>
+                <div class="delivery-print-contacts">
+                    <div class="delivery-print-phone">
+                        <span>Телефон</span>
+                        <strong>${htmlSafe(client.phone || '—')}</strong>
+                    </div>
+                    <div class="delivery-print-address">
+                        <span>Адрес доставки</span>
+                        <strong>${htmlSafe(client.address || '—')}</strong>
+                    </div>
+                </div>
+                <div class="delivery-print-composition">
+                    <span>Состав заказа</span>
+                    <div class="delivery-print-items">${deliveryItemLines(o, 'is-print-card')}</div>
+                </div>
+            </article>`;
+        }).join('');
+    }
 
     document.querySelectorAll('#deliveryBody tr[data-order]').forEach(tr => {
         tr.addEventListener('click', () => openOrderDetail(+tr.dataset.order));
