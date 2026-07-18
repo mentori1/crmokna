@@ -67,6 +67,7 @@ window.exportBackup = function() {
         clients, suppliers,
         orders: orders.map(o => ({ ...o })),
         transactions,
+        salary_payments: salaryPayments,
         app_settings: Object.values(appSettings),
     };
     const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
@@ -356,6 +357,7 @@ function calcOrder(o) {
 }
 
 let transactions = [];
+let salaryPayments = [];
 
 // Общие настройки CRM хранятся на сервере и одинаковы для обоих менеджеров.
 let appSettings = {};
@@ -385,10 +387,25 @@ async function saveAppSetting(id, value, label) {
 
 const fmt = n => new Intl.NumberFormat('ru-RU').format(Math.round(n));
 const fmtCur = n => fmt(n) + ' ₽';   // неразрывный пробел — «₽» не съезжает на новую строку
+const fmtCurExact = n => {
+    const value = Number(n) || 0;
+    const hasKopecks = Math.abs(value - Math.round(value)) >= 0.005;
+    return new Intl.NumberFormat('ru-RU', {
+        minimumFractionDigits: hasKopecks ? 2 : 0,
+        maximumFractionDigits: 2,
+    }).format(value) + ' ₽';
+};
+const htmlSafe = value => String(value ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const fmtDate = d => {
     if (!d) return '—';
     const parts = d.split('-');
     return `${parts[2]}.${parts[1]}.${parts[0]}`;
+};
+const todayLocalDate = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 // Отображаемое имя клиента: имя, либо (если пусто) адрес, либо «Без имени».
 // Так клиенты-«чистый адрес» видны как «Трубачева 42», а не прочерком.
@@ -1101,126 +1118,118 @@ function openOrderDetail(orderId) {
     const c = calcOrder(o);
     const client = clients.find(x => x.id === o.client_id) || {};
     const supplierIds = [...new Set(o.items.map(i => i.supplier_id).filter(Boolean))];
+    const clientPayments = transactions
+        .filter(t => t.order_id === o.id && t.type === 'income')
+        .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.id || 0) - (a.id || 0));
+    const productionHistory = o.status_history || [];
+    const orderLabel = o.order_number || crmId(o);
 
-    openModal('Заказ ' + (o.order_number || crmId(o)), `
-        <div class="detail-grid">
-            <div class="detail-item">
-                <div class="detail-label">CRM-ID <span class="text-muted" style="font-weight:400">(наш, для писем)</span></div>
-                <div class="detail-value td-bold" style="font-variant-numeric:tabular-nums">${crmId(o)}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">Номер от производства</div>
-                <div class="detail-value ${o.order_number ? 'td-bold' : 'text-muted'}">${o.order_number || 'ещё не присвоен'}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">Дата создания</div>
-                <div class="detail-value">${fmtDate(o.created_at)}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">Клиент</div>
-                <div class="detail-value">${client.name || '—'}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">Телефон</div>
-                <div class="detail-value">${client.phone || '—'}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">Поставщик(и)</div>
-                <div class="detail-value">${supplierIds.map(supplierName).join(', ')}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">Статус</div>
-                <div class="detail-value"><span class="badge badge-${o.status}">${statusLabel(o.status)}</span></div>
-            </div>
+    openModal('Заказ ' + orderLabel, `
+        <div class="order-detail-compact">
+        <div class="order-summary-grid">
+            <div><span>CRM-ID</span><b>${crmId(o)}</b></div>
+            <div><span>№ производства</span><b class="${o.order_number ? '' : 'text-muted'}">${htmlSafe(o.order_number || 'не присвоен')}</b></div>
+            <div><span>Дата</span><b>${fmtDate(o.created_at)}</b></div>
+            <div><span>Статус</span><b><span class="badge badge-${o.status}">${statusLabel(o.status)}</span></b></div>
+            <div><span>Клиент</span><b>${htmlSafe(client.name || '—')}</b></div>
+            <div><span>Телефон</span><b>${htmlSafe(client.phone || '—')}</b></div>
+            <div class="order-summary-suppliers"><span>Поставщик(и)</span><b>${htmlSafe(supplierIds.map(supplierName).join(', ') || '—')}</b></div>
         </div>
 
-        <div class="detail-section-title">Производство</div>
-        <p class="text-muted" style="font-size:12px;margin:-4px 0 8px">Номер от производства вписывается кнопкой «Редактировать» (поле «Номер от производства»). Наш CRM-ID уходит в письме — по нему привязывается ответ.</p>
-        <div class="detail-grid">
-            <div class="detail-item">
-                <div class="detail-label">Статус от производства</div>
-                <div class="detail-value">${o.production_status ? `<span class="badge badge-in_progress">${PRODUCTION_STATUS_LABELS[o.production_status] || o.production_status}</span>` : '<span class="text-muted">нет данных</span>'}</div>
-            </div>
-        </div>
-        <div style="margin-top:10px">
-            <button class="btn btn-outline" onclick="openProductionRequest(${o.id})">Сформировать заявку на производство</button>
-        </div>
-        ${(o.status_history && o.status_history.length) ? `
-        <div class="detail-section-title" style="margin-top:16px">История статусов производства</div>
-        <table class="items-table">
-            <thead><tr><th>Дата</th><th>Статус</th><th>Источник</th></tr></thead>
-            <tbody>${o.status_history.map(h => `
-                <tr>
-                    <td>${fmtDate(h.date)}</td>
-                    <td>${PRODUCTION_STATUS_LABELS[h.status] || h.status}</td>
-                    <td class="text-muted">${h.source || '—'}</td>
-                </tr>`).join('')}</tbody>
-        </table>` : ''}
+        <div class="order-detail-columns">
+            <div class="order-detail-main">
+                <div class="order-section-heading"><b>Товары</b><span>${o.items.length} поз.</span></div>
+                <div class="order-items-scroll">
+                    <table class="items-table order-items-compact">
+                        <thead><tr><th>Наименование</th><th>Кол-во</th><th>Закупка</th><th>Продажа</th><th>Итого</th></tr></thead>
+                        <tbody>${o.items.map(i => `
+                            <tr>
+                                <td>${htmlSafe(i.product_name)}${i.dimensions ? `<br><span class="text-muted">${htmlSafe(i.dimensions)}</span>` : ''}</td>
+                                <td class="font-mono">${i.quantity}</td>
+                                <td class="font-mono">${fmtCur(i.purchase_price)}</td>
+                                <td class="font-mono">${fmtCur(i.sale_price)}</td>
+                                <td class="font-mono td-bold">${fmtCur(i.sale_price * i.quantity)}</td>
+                            </tr>`).join('')}
+                            <tr class="order-items-total">
+                                <td colspan="2">Итого</td>
+                                <td class="font-mono">${fmtCur(c.totalPurchase)}</td>
+                                <td></td>
+                                <td class="font-mono">${fmtCur(c.totalSale)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
 
-        <div class="detail-section-title">Товары</div>
-        <table class="items-table">
-            <thead><tr><th>Наименование</th><th>Кол-во</th><th>Закупка</th><th>Продажа</th><th>Итого</th></tr></thead>
-            <tbody>${o.items.map(i => `
-                <tr>
-                    <td>${i.product_name}${i.dimensions ? `<br><span class="text-muted" style="font-size:12px">${i.dimensions}</span>` : ''}</td>
-                    <td class="font-mono">${i.quantity}</td>
-                    <td class="font-mono">${fmtCur(i.purchase_price)}</td>
-                    <td class="font-mono">${fmtCur(i.sale_price)}</td>
-                    <td class="font-mono td-bold">${fmtCur(i.sale_price * i.quantity)}</td>
-                </tr>`).join('')}
-                <tr style="font-weight:600;border-top:2px solid var(--slate-200)">
-                    <td colspan="2">Итого</td>
-                    <td class="font-mono">${fmtCur(c.totalPurchase)}</td>
-                    <td></td>
-                    <td class="font-mono">${fmtCur(c.totalSale)}</td>
-                </tr>
-            </tbody>
-        </table>
+                <div class="order-production-compact">
+                    <div>
+                        <span>Производство</span>
+                        <b>${o.production_status ? `<span class="badge badge-in_progress">${PRODUCTION_STATUS_LABELS[o.production_status] || htmlSafe(o.production_status)}</span>` : '<span class="text-muted">нет данных</span>'}</b>
+                    </div>
+                    <button class="btn btn-sm btn-outline" onclick="openProductionRequest(${o.id})">Сформировать заявку</button>
+                </div>
+                ${productionHistory.length ? `
+                <details class="production-history-compact">
+                    <summary>История производства (${productionHistory.length})</summary>
+                    ${productionHistory.map(h => `<div><span>${fmtDate(h.date)}</span><b>${PRODUCTION_STATUS_LABELS[h.status] || htmlSafe(h.status)}</b><small>${htmlSafe(h.source || '—')}</small></div>`).join('')}
+                </details>` : ''}
+            </div>
 
-        <div class="detail-section-title compact-finance-title">Финансы</div>
-        <div class="compact-finance-grid">
-            <div class="compact-finance-item">
-                <span>Продажа</span><b>${fmtCur(c.totalSale)}</b>
-            </div>
-            <div class="compact-finance-item">
-                <span>Закупка</span><b>${fmtCur(c.totalPurchase)}</b>
-            </div>
-            <div class="compact-finance-item ${c.clientDebt > 0 ? 'has-debt' : 'is-paid'}">
-                <span>Клиент внёс</span><b>${fmtCur(c.paidByClient)}</b>
-                <small>${c.clientDebt > 0 ? 'Осталось ' + fmtCur(c.clientDebt) : 'Оплачено полностью'}</small>
-            </div>
-            <div class="compact-finance-item ${c.supplierDebt > 0 ? 'has-debt' : 'is-paid'}">
-                <span>Поставщикам</span><b>${fmtCur(c.paidToSupplier)}</b>
-                <small>${c.supplierDebt > 0 ? 'Осталось ' + fmtCur(c.supplierDebt) : 'Оплачено полностью'}</small>
-            </div>
+            <aside class="order-detail-finance">
+                <div class="order-section-heading"><b>Финансы</b></div>
+                <div class="compact-finance-grid">
+                    <div class="compact-finance-item"><span>Продажа</span><b>${fmtCur(c.totalSale)}</b></div>
+                    <div class="compact-finance-item"><span>Закупка</span><b>${fmtCur(c.totalPurchase)}</b></div>
+                    <div class="compact-finance-item ${c.clientDebt > 0 ? 'has-debt' : 'is-paid'}">
+                        <span>Клиент внёс</span><b>${fmtCur(c.paidByClient)}</b>
+                        <small>${c.clientDebt > 0 ? 'Осталось ' + fmtCur(c.clientDebt) : 'Оплачено полностью'}</small>
+                    </div>
+                    <div class="compact-finance-item ${c.supplierDebt > 0 ? 'has-debt' : 'is-paid'}">
+                        <span>Поставщикам</span><b>${fmtCur(c.paidToSupplier)}</b>
+                        <small>${c.supplierDebt > 0 ? 'Осталось ' + fmtCur(c.supplierDebt) : 'Оплачено полностью'}</small>
+                    </div>
+                </div>
+
+                <div class="order-section-heading order-payments-heading"><b>Платежи клиента</b><span>${clientPayments.length}</span></div>
+                <div class="order-client-payments">
+                    ${clientPayments.length ? clientPayments.map(t => `
+                        <div class="order-payment-row ${t._pending ? 'is-pending' : ''}">
+                            <span>${fmtDate(t.date)}</span>
+                            <div>${htmlSafe(t.description || 'Оплата от клиента')}${t._pending ? '<small>сохраняется…</small>' : ''}</div>
+                            <b>${fmtCurExact(t.amount)}</b>
+                        </div>`).join('') : '<div class="empty-state order-payment-empty">Платежей клиента пока нет</div>'}
+                </div>
+
+                <div class="order-section-heading order-add-payment-heading"><b>Добавить платёж</b></div>
+                <div class="compact-payment-form order-payment-form">
+                    <div class="form-group">
+                        <label>Сумма ₽</label>
+                        <input type="number" id="paymentAmount" placeholder="10 000" min="0" step="any">
+                    </div>
+                    <div class="form-group">
+                        <label>Дата</label>
+                        <input type="date" id="paymentDate" value="${todayLocalDate()}">
+                    </div>
+                    <div class="form-group">
+                        <label>Тип</label>
+                        <select id="paymentType" onchange="togglePaymentSupplier()">
+                            <option value="income">От клиента</option>
+                            <option value="expense">Поставщику</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="paymentSupplierWrap" style="display:none">
+                        <label>Поставщик</label>
+                        <select id="paymentSupplier">${supplierIds.map(id => `<option value="${id}">${htmlSafe(supplierName(id))}</option>`).join('')}</select>
+                    </div>
+                    <div class="form-group compact-payment-desc">
+                        <label>Описание</label>
+                        <input type="text" id="paymentDesc" placeholder="Предоплата / остаток">
+                    </div>
+                    <button class="btn btn-primary" onclick="addPayment(${o.id})">Добавить платёж</button>
+                </div>
+            </aside>
         </div>
 
-        <div class="compact-payment-form">
-            <div class="form-group">
-                <label>Сумма ₽</label>
-                <input type="number" id="paymentAmount" placeholder="10 000" min="0" step="any">
-            </div>
-            <div class="form-group">
-                <label>Тип платежа</label>
-                <select id="paymentType" onchange="togglePaymentSupplier()">
-                    <option value="income">От клиента</option>
-                    <option value="expense">Поставщику</option>
-                </select>
-            </div>
-            <div class="form-group" id="paymentSupplierWrap" style="display:none">
-                <label>Поставщик</label>
-                <select id="paymentSupplier">
-                    ${supplierIds.map(id => `<option value="${id}">${supplierName(id)}</option>`).join('')}
-                </select>
-            </div>
-            <div class="form-group compact-payment-desc">
-                <label>Описание</label>
-                <input type="text" id="paymentDesc" placeholder="Предоплата / остаток">
-            </div>
-            <button class="btn btn-primary" onclick="addPayment(${o.id})">Добавить платёж</button>
-        </div>
-
-        <div class="form-actions" style="margin-top:24px">
+        <div class="form-actions order-detail-actions">
             <div style="display:flex;gap:8px;margin-right:auto">
                 <button class="btn btn-outline" onclick="openOrderEditForm(${o.id})">Редактировать</button>
                 <button class="btn btn-danger" onclick="deleteOrder(${o.id})">Удалить заказ</button>
@@ -1230,9 +1239,11 @@ function openOrderDetail(orderId) {
             </select>
             <button class="btn btn-success" onclick="changeOrderStatus(${o.id})">Сохранить статус</button>
         </div>
+        </div>
     `);
     const modalBody = document.getElementById('modalBody');
     modalBody.dataset.orderDetail = String(o.id);
+    document.getElementById('modalOverlay').classList.add('order-detail-open');
 }
 
 // Редактирование существующего заказа: ФИО клиента, телефон, продукция, поставщик
@@ -1392,6 +1403,8 @@ window.addPayment = function(orderId) {
     if (!o) return;
     const amount = parseFloat(document.getElementById('paymentAmount').value);
     if (!amount || amount <= 0) { alert('Укажите сумму платежа'); return; }
+    const paymentDate = document.getElementById('paymentDate')?.value || todayLocalDate();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) { alert('Укажите дату платежа'); return; }
     const type = document.getElementById('paymentType').value;
     const desc = document.getElementById('paymentDesc').value.trim() || (type === 'income' ? 'Оплата от клиента' : 'Оплата поставщику');
     const supplierId = type === 'expense' ? +document.getElementById('paymentSupplier')?.value : null;
@@ -1406,7 +1419,7 @@ window.addPayment = function(orderId) {
     const newId = transactions.length ? Math.max(...transactions.map(t => t.id)) + 1 : 1;
     const tx = {
         id: newId,
-        date: new Date().toISOString().slice(0, 10),
+        date: paymentDate,
         type: type,
         entity_type: type === 'income' ? 'client' : 'supplier',
         entity_id: type === 'income' ? o.client_id : (supplierId || o.client_id),
@@ -1900,33 +1913,90 @@ function olaSalaryTurnover(month) {
         .reduce((sum, order) => sum + calcOrder(order).totalSale, 0);
 }
 
+function formatSalaryMonth(month) {
+    const [year, number] = String(month || '').split('-').map(Number);
+    if (!year || !number) return month || '—';
+    return new Date(year, number - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+}
+
+function olaPaymentsForMonth(month) {
+    return salaryPayments.filter(p => p.employee_key === 'olya' && p.salary_month === month && !p.deleted_at);
+}
+
+window.openEmployees = function() {
+    openModal('Сотрудники', '<div class="employee-payroll-shell"><div class="ola-salary-panel" id="olaSalaryPanel"></div></div>');
+    document.getElementById('modalOverlay').classList.add('employees-open');
+    renderOlaSalary();
+};
+
 function renderOlaSalary() {
     const panel = document.getElementById('olaSalaryPanel');
     if (!panel) return;
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const months = [...new Set([currentMonth, ...orders.map(o => (o.created_at || '').slice(0, 7)).filter(Boolean)])].sort().reverse();
+    const months = [...new Set([
+        currentMonth,
+        ...orders.map(o => (o.created_at || '').slice(0, 7)).filter(Boolean),
+        ...salaryPayments.map(p => p.salary_month).filter(Boolean),
+    ])].sort().reverse();
     if (!window.olaSalaryMonth || !months.includes(window.olaSalaryMonth)) window.olaSalaryMonth = currentMonth;
     const month = window.olaSalaryMonth;
     const rate = olaSalaryRateForMonth(month);
     const turnover = olaSalaryTurnover(month);
     const salary = turnover * rate / 100;
+    const monthPayments = olaPaymentsForMonth(month);
+    const paid = monthPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const remaining = Math.max(0, salary - paid);
+    const history = [...salaryPayments]
+        .filter(p => p.employee_key === 'olya' && !p.deleted_at)
+        .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.id || 0) - (a.id || 0));
     const monthOptions = months.map(value => {
-        const [year, number] = value.split('-').map(Number);
-        const label = new Date(year, number - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
-        return `<option value="${value}" ${value === month ? 'selected' : ''}>${label}</option>`;
+        return `<option value="${value}" ${value === month ? 'selected' : ''}>${formatSalaryMonth(value)}</option>`;
     }).join('');
 
     panel.innerHTML = `
         <div class="ola-salary-head">
-            <div><h2>ЗП Оли</h2><p>Считается от суммы продаж в созданных заказах за месяц</p></div>
-            <select id="olaSalaryMonth" onchange="window.olaSalaryMonth=this.value;renderFinances()">${monthOptions}</select>
+            <div><h2>Оля</h2><p>Зарплата считается от суммы продаж в созданных заказах за месяц</p></div>
+            <select id="olaSalaryMonth" onchange="window.olaSalaryMonth=this.value;renderOlaSalary()">${monthOptions}</select>
         </div>
         <div class="ola-salary-values">
             <div><span>Оборот по продажам</span><b>${fmtCur(turnover)}</b></div>
-            <div class="ola-rate-field"><label for="olaSalaryRate">Ставка</label><span><input id="olaSalaryRate" type="number" min="0" max="100" step="0.1" value="${rate}" oninput="previewOlaSalary()"> %</span></div>
-            <div class="ola-salary-total"><span>Зарплата за месяц</span><b id="olaSalaryTotal" data-turnover="${turnover}">${fmtCur(salary)}</b></div>
-            <button class="btn btn-primary" onclick="saveOlaSalaryRate()">Сохранить ставку</button>
+            <div class="ola-rate-field">
+                <label for="olaSalaryRate">Ставка</label>
+                <span><input id="olaSalaryRate" type="number" min="0" max="100" step="0.1" value="${rate}" oninput="previewOlaSalary()"> %</span>
+                <button class="btn btn-sm btn-outline" onclick="saveOlaSalaryRate()">Сохранить</button>
+            </div>
+            <div class="ola-salary-total"><span>Начислено</span><b id="olaSalaryTotal" data-turnover="${turnover}" data-paid="${paid}">${fmtCurExact(salary)}</b></div>
+            <div><span>Выплачено</span><b>${fmtCurExact(paid)}</b></div>
+            <div class="ola-salary-due ${remaining > 0 ? 'has-debt' : 'is-paid'}"><span>Осталось выплатить</span><b id="olaSalaryDue">${remaining > 0 ? fmtCurExact(remaining) : 'Выплачено'}</b></div>
+        </div>
+
+        <div class="employee-section-title">Внести выплату за ${formatSalaryMonth(month)}</div>
+        <div class="salary-payment-form">
+            <div class="form-group">
+                <label>Сумма ₽</label>
+                <input type="number" id="olaPayoutAmount" min="0" step="any" value="${remaining > 0 ? remaining.toFixed(2) : ''}" placeholder="0">
+            </div>
+            <div class="form-group">
+                <label>Дата выплаты</label>
+                <input type="date" id="olaPayoutDate" value="${todayLocalDate()}">
+            </div>
+            <div class="form-group salary-payment-note">
+                <label>Примечание</label>
+                <input type="text" id="olaPayoutNote" placeholder="Аванс / остаток / перевод">
+            </div>
+            <button class="btn btn-primary" ${remaining <= 0 ? 'disabled' : ''} onclick="addOlaSalaryPayment()">Добавить выплату</button>
+        </div>
+
+        <div class="employee-section-title">История выплат</div>
+        <div class="salary-history">
+            ${history.length ? history.map(payment => `
+                <div class="salary-history-row">
+                    <span>${fmtDate(payment.date)}</span>
+                    <span>${formatSalaryMonth(payment.salary_month)}</span>
+                    <div>${htmlSafe(payment.note || 'Выплата зарплаты')}</div>
+                    <b>${fmtCurExact(payment.amount)}</b>
+                </div>`).join('') : '<div class="empty-state">Выплат пока не было</div>'}
         </div>
     `;
 }
@@ -1937,7 +2007,11 @@ window.previewOlaSalary = function() {
     if (!input || !total) return;
     const rate = Number(String(input.value).replace(',', '.'));
     const turnover = +total.dataset.turnover || 0;
-    total.textContent = fmtCur(turnover * (Number.isFinite(rate) ? rate : 0) / 100);
+    const paid = +total.dataset.paid || 0;
+    const salary = turnover * (Number.isFinite(rate) ? rate : 0) / 100;
+    total.textContent = fmtCurExact(salary);
+    const due = document.getElementById('olaSalaryDue');
+    if (due) due.textContent = salary - paid > 0 ? fmtCurExact(salary - paid) : 'Выплачено';
 };
 
 window.saveOlaSalaryRate = async function() {
@@ -1954,8 +2028,47 @@ window.saveOlaSalaryRate = async function() {
     dbToast('Ставка ЗП сохранена', true);
 };
 
-function renderFinances() {
+let pendingOlaPayoutKey = null;
+
+window.addOlaSalaryPayment = async function() {
+    const amount = Number(String(document.getElementById('olaPayoutAmount')?.value || '').replace(',', '.'));
+    const date = document.getElementById('olaPayoutDate')?.value || '';
+    const note = document.getElementById('olaPayoutNote')?.value.trim() || '';
+    if (!Number.isFinite(amount) || amount <= 0) { dbToast('Укажите сумму выплаты', false); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { dbToast('Укажите дату выплаты', false); return; }
+
+    const rate = olaSalaryRateForMonth(window.olaSalaryMonth);
+    const salary = olaSalaryTurnover(window.olaSalaryMonth) * rate / 100;
+    const paid = olaPaymentsForMonth(window.olaSalaryMonth).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const remaining = Math.max(0, salary - paid);
+    if (amount > remaining + 0.0001) {
+        dbToast(`Сумма больше остатка (${fmtCurExact(remaining)})`, false);
+        return;
+    }
+
+    pendingOlaPayoutKey = pendingOlaPayoutKey || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+    const row = {
+        id: nextLocalId(salaryPayments),
+        employee_key: 'olya',
+        employee_name: 'Оля',
+        salary_month: window.olaSalaryMonth,
+        date,
+        amount,
+        note,
+        idempotency_key: pendingOlaPayoutKey,
+        created_at: new Date().toISOString(),
+    };
+    const { data, error } = await SB.from('salary_payments').insert(row);
+    if (error) { dbErr('выплата зарплаты', error); return; }
+    const saved = (Array.isArray(data) ? data[0] : data) || row;
+    saved.amount = Number(saved.amount);
+    if (!salaryPayments.some(p => p.idempotency_key === saved.idempotency_key)) salaryPayments.push(saved);
+    pendingOlaPayoutKey = null;
     renderOlaSalary();
+    dbToast('Выплата сохранена', true);
+};
+
+function renderFinances() {
     const savedTransactions = transactions.filter(t => !t._pending);
 
     // Выбор: Все / Доходы / Расходы  +  разбивка по месяцам
@@ -2031,6 +2144,7 @@ document.querySelectorAll('#finTypeToggle .fin-tab').forEach(btn => {
 });
 
 // Кнопка «+ Операция» в Финансах
+document.getElementById('btnEmployees').addEventListener('click', openEmployees);
 document.getElementById('btnNewTransaction').addEventListener('click', () => {
     const orderOptions = [...orders]
         .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
@@ -2047,7 +2161,7 @@ document.getElementById('btnNewTransaction').addEventListener('click', () => {
             </div>
             <div class="form-group">
                 <label>Дата</label>
-                <input type="date" id="txFormDate" value="${new Date().toISOString().slice(0,10)}">
+                <input type="date" id="txFormDate" value="${todayLocalDate()}">
             </div>
             <div class="form-group">
                 <label>Заказ</label>
@@ -2112,7 +2226,7 @@ window.saveNewTransaction = function() {
     const newId = transactions.length ? Math.max(...transactions.map(t => t.id)) + 1 : 1;
     const tx = {
         id: newId,
-        date: document.getElementById('txFormDate').value || new Date().toISOString().slice(0, 10),
+        date: document.getElementById('txFormDate').value || todayLocalDate(),
         type: type,
         entity_type: type === 'income' ? 'client' : 'supplier',
         entity_id: type === 'income' ? order.client_id : supplierId,
@@ -2924,12 +3038,14 @@ function openModal(title, bodyHTML) {
     const body = document.getElementById('modalBody');
     delete body.dataset.orderDetail;
     body.innerHTML = bodyHTML;
-    document.getElementById('modalOverlay').classList.add('open');
+    const overlay = document.getElementById('modalOverlay');
+    overlay.classList.remove('order-detail-open', 'employees-open');
+    overlay.classList.add('open');
     document.body.classList.add('modal-open');   // блокируем скролл страницы под окном
 }
 
 function closeModal() {
-    document.getElementById('modalOverlay').classList.remove('open');
+    document.getElementById('modalOverlay').classList.remove('open', 'order-detail-open', 'employees-open');
     document.body.classList.remove('modal-open');
     document.body.classList.remove('print-delivery-order');
 }
@@ -2994,16 +3110,18 @@ async function fetchAll(table, select = '*') {
 async function loadData() {
     await ensureAuthenticated();
     try {
-        const [c, s, ordRaw, t, settings] = await Promise.all([
+        const [c, s, ordRaw, t, payouts, settings] = await Promise.all([
             fetchAll('clients'),
             fetchAll('suppliers'),
             fetchAll('orders', '*, order_items(*)'),
             fetchAll('transactions'),
+            fetchAll('salary_payments').catch(() => []),
             fetchAll('app_settings').catch(() => []),
         ]);
         clients = c;
         suppliers = s;
         transactions = t.map(x => ({ ...x, amount: +x.amount }));
+        salaryPayments = payouts.map(x => ({ ...x, amount: +x.amount }));
         appSettings = Object.fromEntries(settings.map(row => [row.id, row]));
         // Скрытые/добавленные вручную названия продукции
         try {
@@ -3052,14 +3170,16 @@ function subscribeRealtime() {
             if (refreshing || document.hidden) return;
             refreshing = true;
             try {
-                const [c, s, ordRaw, t, settings] = await Promise.all([
+                const [c, s, ordRaw, t, payouts, settings] = await Promise.all([
                     fetchAll('clients'), fetchAll('suppliers'),
                     fetchAll('orders', '*, order_items(*)'), fetchAll('transactions'),
+                    fetchAll('salary_payments').catch(() => []),
                     fetchAll('app_settings').catch(() => []),
                 ]);
                 clients = c;
                 suppliers = s;
                 transactions = t.map(x => ({ ...x, amount: +x.amount }));
+                salaryPayments = payouts.map(x => ({ ...x, amount: +x.amount }));
                 appSettings = Object.fromEntries(settings.map(row => [row.id, row]));
                 orders = ordRaw.map(o => {
                     const items = (o.order_items || []).map(i => ({
@@ -3071,6 +3191,7 @@ function subscribeRealtime() {
                     return { ...rest, items };
                 });
                 renderSection(location.hash.replace('#', '') || 'delivery');
+                if (document.getElementById('modalOverlay')?.classList.contains('employees-open')) renderOlaSalary();
             } catch (e) { console.warn('sync', e); }
             finally { refreshing = false; }
         });

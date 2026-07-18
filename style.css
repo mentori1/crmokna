@@ -858,6 +858,98 @@ body.modal-open { overflow: hidden; }
     padding-bottom: 6px; border-bottom: 1px solid var(--slate-100);
 }
 
+/* Карточка заказа на десктопе: всё основное помещается без длинной прокрутки */
+.order-detail-open { padding: 12px 16px; }
+.order-detail-open .modal { max-width: 1180px; max-height: calc(100vh - 24px); }
+.order-detail-open .modal-header { padding: 12px 18px; }
+.order-detail-open .modal-body { padding: 14px 18px; }
+.order-summary-grid {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px; margin-bottom: 10px;
+}
+.order-summary-grid > div {
+    min-width: 0; padding: 7px 9px; border: 1px solid var(--slate-200);
+    border-radius: 7px; background: var(--slate-50);
+}
+.order-summary-grid span,
+.order-summary-grid b { display: block; }
+.order-summary-grid > div > span {
+    margin-bottom: 2px; color: var(--slate-500); font-size: 9px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: .25px;
+}
+.order-summary-grid b { font-size: 12px; overflow-wrap: anywhere; }
+.order-summary-suppliers { grid-column: span 2; }
+.order-detail-columns {
+    display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(360px, .9fr);
+    gap: 14px; align-items: start;
+}
+.order-detail-main,
+.order-detail-finance {
+    min-width: 0; padding: 10px; border: 1px solid var(--slate-200);
+    border-radius: 9px; background: #fff;
+}
+.order-detail-finance { background: var(--slate-50); }
+.order-section-heading {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; margin-bottom: 6px; color: var(--slate-700); font-size: 12px;
+}
+.order-section-heading > span {
+    padding: 2px 7px; border-radius: 10px; background: var(--slate-200);
+    color: var(--slate-600); font-size: 10px;
+}
+.order-items-scroll { max-height: 235px; overflow-y: auto; }
+.order-items-compact { margin: 0; }
+.order-items-compact th { padding: 5px 6px; font-size: 9px; }
+.order-items-compact td { padding: 6px; font-size: 11px; }
+.order-items-compact td .text-muted { font-size: 10px; }
+.order-items-total { font-weight: 600; border-top: 2px solid var(--slate-200); }
+.order-production-compact {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-top: 9px; padding: 8px 9px;
+    border: 1px solid var(--slate-200); border-radius: 7px; background: var(--slate-50);
+}
+.order-production-compact > div > span,
+.order-production-compact > div > b { display: block; }
+.order-production-compact > div > span {
+    margin-bottom: 3px; color: var(--slate-500); font-size: 9px;
+    font-weight: 600; text-transform: uppercase;
+}
+.production-history-compact { margin-top: 7px; font-size: 11px; }
+.production-history-compact summary { cursor: pointer; color: var(--blue-700); font-weight: 600; }
+.production-history-compact > div {
+    display: grid; grid-template-columns: 75px 1fr 1fr; gap: 8px;
+    padding: 5px 0; border-bottom: 1px solid var(--slate-100);
+}
+.production-history-compact small { color: var(--slate-500); }
+.order-detail-finance .compact-finance-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+.order-detail-finance .compact-finance-item { padding: 7px 8px; }
+.order-detail-finance .compact-finance-item b { font-size: 13px; }
+.order-payments-heading,
+.order-add-payment-heading { margin-top: 9px; }
+.order-client-payments {
+    max-height: 112px; overflow-y: auto; border: 1px solid var(--slate-200);
+    border-radius: 7px; background: #fff;
+}
+.order-payment-row {
+    display: grid; grid-template-columns: 72px minmax(0, 1fr) auto;
+    gap: 7px; align-items: center; padding: 6px 8px; font-size: 10px;
+}
+.order-payment-row + .order-payment-row { border-top: 1px solid var(--slate-100); }
+.order-payment-row > span { color: var(--slate-500); }
+.order-payment-row > div { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.order-payment-row > div small { display: block; color: var(--amber-600); }
+.order-payment-row > b { font-size: 11px; white-space: nowrap; color: var(--green-700); }
+.order-payment-row.is-pending { opacity: .65; }
+.order-payment-empty { padding: 12px !important; }
+.order-payment-form {
+    grid-template-columns: 1fr 1fr; gap: 6px; margin: 0; padding: 8px;
+}
+.order-payment-form .compact-payment-desc { grid-column: 1 / -1; }
+.order-payment-form > .btn { grid-column: 1 / -1; height: 32px; }
+.order-detail-actions { margin-top: 10px; padding-top: 9px; }
+.order-detail-actions .btn,
+.order-detail-actions select { padding-top: 7px; padding-bottom: 7px; }
+
 /* Отдельный лист состава одного заказа для логиста */
 .delivery-order-sheet { color: var(--slate-800); }
 .delivery-sheet-heading {
@@ -890,9 +982,12 @@ body.modal-open { overflow: hidden; }
     border: 1px solid var(--slate-200); border-radius: 8px; overflow: hidden;
 }
 
-/* Финансы: единственный расчётный блок — помесячная зарплата Оли */
+/* Финансы → Сотрудники: помесячная зарплата и история выплат Оли */
+.finance-header-actions { display: flex; gap: 8px; }
+.employees-open .modal { max-width: 1000px; }
+.employee-payroll-shell { min-width: 0; }
 .ola-salary-panel {
-    margin-bottom: 24px; padding: 18px 20px; background: #fff;
+    padding: 18px 20px; background: #fff;
     border: 1px solid var(--slate-200); border-left: 4px solid var(--purple-500);
     border-radius: 10px; box-shadow: var(--shadow);
 }
@@ -907,7 +1002,7 @@ body.modal-open { overflow: hidden; }
     border-radius: 6px; background: #fff; font: inherit;
 }
 .ola-salary-values {
-    display: grid; grid-template-columns: minmax(170px, 1fr) 150px minmax(170px, 1fr) auto;
+    display: grid; grid-template-columns: minmax(150px, 1fr) 145px minmax(140px, 1fr) minmax(140px, 1fr) minmax(150px, 1fr);
     align-items: end; gap: 10px;
 }
 .ola-salary-values > div {
@@ -922,9 +1017,34 @@ body.modal-open { overflow: hidden; }
     width: 82px; padding: 7px 8px; border: 1px solid var(--slate-300);
     border-radius: 6px; font: inherit;
 }
+.ola-rate-field .btn { margin-top: 5px; padding: 4px 8px; }
 .ola-salary-total { border-color: var(--green-100) !important; background: var(--green-50) !important; }
 .ola-salary-total b { color: var(--green-700); }
-.ola-salary-values > .btn { height: 42px; }
+.ola-salary-due.has-debt { border-color: var(--red-100); background: var(--red-50); }
+.ola-salary-due.has-debt b { color: var(--red-600); }
+.ola-salary-due.is-paid { border-color: var(--green-100); background: var(--green-50); }
+.employee-section-title {
+    margin: 16px 0 8px; color: var(--slate-700); font-size: 13px; font-weight: 700;
+}
+.salary-payment-form {
+    display: grid; grid-template-columns: 140px 160px minmax(180px, 1fr) auto;
+    gap: 8px; align-items: end; padding: 10px;
+    border: 1px solid var(--slate-200); border-radius: 8px; background: var(--slate-50);
+}
+.salary-payment-form input { padding: 8px 9px; }
+.salary-payment-form > .btn { height: 36px; }
+.salary-history {
+    max-height: 220px; overflow-y: auto; border: 1px solid var(--slate-200);
+    border-radius: 8px; background: #fff;
+}
+.salary-history-row {
+    display: grid; grid-template-columns: 90px 145px minmax(0, 1fr) auto;
+    gap: 10px; align-items: center; padding: 9px 11px; font-size: 12px;
+}
+.salary-history-row + .salary-history-row { border-top: 1px solid var(--slate-100); }
+.salary-history-row > span { color: var(--slate-500); }
+.salary-history-row > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.salary-history-row > b { color: var(--green-700); white-space: nowrap; }
 
 .items-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
 .items-table th {
@@ -993,6 +1113,11 @@ body.modal-open { overflow: hidden; }
     .detail-grid { grid-template-columns: 1fr; }
     .metrics-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
     .ola-salary-values { grid-template-columns: 1fr 1fr; }
+    .salary-payment-form { grid-template-columns: 1fr 1fr; }
+    .salary-payment-note { grid-column: 1 / -1; }
+    .salary-payment-form > .btn { grid-column: 1 / -1; }
+    .order-detail-columns { grid-template-columns: 1fr; }
+    .order-summary-grid { grid-template-columns: 1fr 1fr; }
 
     /* Затемнение под открытым меню */
     .sidebar-backdrop {
@@ -1046,6 +1171,7 @@ body.modal-open { overflow: hidden; }
     .filter-group input { flex: 1; }
     .orders-toolbar { flex-direction: column; align-items: stretch; }
     .orders-toolbar .btn { width: 100%; justify-content: center; }
+    .finance-header-actions { flex-direction: column; }
 
     /* ── Таблицы → карточки (без горизонтального скролла) ── */
     .table-wrapper { overflow: visible; background: transparent; box-shadow: none; }
@@ -1202,7 +1328,16 @@ body.modal-open { overflow: hidden; }
     .ola-salary-head { flex-direction: column; }
     .ola-salary-head select { width: 100%; min-width: 0; }
     .ola-salary-values { grid-template-columns: 1fr; }
-    .ola-salary-values > .btn { width: 100%; }
+    .salary-payment-form { grid-template-columns: 1fr; }
+    .salary-payment-note,
+    .salary-payment-form > .btn { grid-column: auto; }
+    .salary-history-row { grid-template-columns: 82px 1fr auto; }
+    .salary-history-row > span:nth-child(2) { display: none; }
+    .order-summary-grid { grid-template-columns: 1fr 1fr; }
+    .order-summary-suppliers { grid-column: 1 / -1; }
+    .order-detail-open .modal-body { padding: 12px; }
+    .order-production-compact { align-items: stretch; flex-direction: column; }
+    .order-production-compact .btn { width: 100%; }
     .delivery-sheet-heading { flex-direction: column; gap: 12px; }
     .delivery-sheet-info { grid-template-columns: 1fr; }
     .delivery-sheet-address { grid-column: auto; }

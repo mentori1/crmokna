@@ -33,12 +33,26 @@ def main():
 
     counts = {}
     first_client = None
-    for table in ('clients','suppliers','orders','order_items','transactions','product_custom','product_hidden','audit_log'):
+    for table in ('clients','suppliers','orders','order_items','transactions','salary_payments','product_custom','product_hidden','app_settings','audit_log'):
         result = call('/api/query', {'table': table, 'action': 'select', 'limit': 5000})['data']
         counts[table] = len(result)
         if table == 'clients':
             first_client = result[0]['id']
     print('counts:', json.dumps(counts, ensure_ascii=False))
+
+    payout_key = str(uuid.uuid4())
+    payout = {
+        'id': 980000001, 'employee_key': 'olya', 'employee_name': 'Оля',
+        'salary_month': '2026-07', 'date': '2026-07-18', 'amount': 1,
+        'note': 'temporary smoke test', 'idempotency_key': payout_key,
+    }
+    first_payout = call('/api/query', {'table':'salary_payments','action':'insert','rows':payout})['data'][0]
+    second_payout = call('/api/query', {'table':'salary_payments','action':'insert','rows':payout})['data'][0]
+    assert first_payout['id'] == second_payout['id']
+    call('/api/query', {'table':'salary_payments','action':'delete','filters':[{'column':'id','op':'eq','value':first_payout['id']}]})
+    payout_rows = call('/api/query', {'table':'salary_payments','action':'select','filters':[{'column':'id','op':'eq','value':first_payout['id']}]})['data']
+    assert not payout_rows
+    print('salary_payment_history: idempotent=yes cleanup=ok')
 
     # 4942 занят мягко удалённым историческим заказом. Сервер обязан сам
     # выдать свободный ID, а не вернуть бесконечный конфликт 409.

@@ -18,6 +18,7 @@ create table suppliers(id integer primary key,name text not null,contact_person 
 create table orders(id integer primary key,order_number text,client_id integer references clients(id),status text default 'new',delivery_status text,created_at text,delivery_date text,notes text default '',settled integer default 0,production_number text,production_status text,production_ship_date text,idempotency_key text unique,version integer not null default 1,updated_at text,deleted_at text,created_by text,updated_by text);
 create table order_items(id integer primary key autoincrement,order_id integer references orders(id) on delete cascade,product_name text,dimensions text default '',supplier_id integer references suppliers(id),quantity real default 1,purchase_price real default 0,sale_price real default 0,version integer not null default 1,updated_at text,deleted_at text,created_by text,updated_by text);
 create table transactions(id integer primary key,date text,type text,entity_type text,entity_id integer,order_id integer not null references orders(id) on delete cascade,amount real default 0,description text default '',idempotency_key text unique,version integer not null default 1,updated_at text,deleted_at text,created_by text,updated_by text);
+create table salary_payments(id integer primary key,employee_key text not null,employee_name text not null default 'Оля',salary_month text not null,date text not null,amount real not null,note text default '',idempotency_key text unique,created_at text,version integer not null default 1,updated_at text,deleted_at text,created_by text,updated_by text);
 create table product_custom(name text primary key,category text);
 create table product_hidden(name text primary key);
 create table app_settings(id text primary key,value text not null,version integer not null default 1,updated_at text,deleted_at text,created_by text,updated_by text);
@@ -31,6 +32,8 @@ create index idx_orders_created on orders(created_at);
 create index idx_items_order on order_items(order_id);
 create index idx_tx_order on transactions(order_id);
 create unique index uq_transactions_idempotency on transactions(idempotency_key) where idempotency_key is not null;
+create index idx_salary_payments_month on salary_payments(employee_key,salary_month,date);
+create unique index uq_salary_payments_idempotency on salary_payments(idempotency_key) where idempotency_key is not null;
 """
 
 TRIGGERS = """
@@ -84,7 +87,7 @@ def main():
         output.unlink()
     conn = sqlite3.connect(output)
     conn.executescript(SCHEMA)
-    for table in ('clients','suppliers','orders','order_items','transactions','product_custom','product_hidden','app_settings','audit_log'):
+    for table in ('clients','suppliers','orders','order_items','transactions','salary_payments','product_custom','product_hidden','app_settings','audit_log'):
         insert_rows(conn, table, load(backup / f'{table}.json'))
     conn.execute("insert or ignore into app_settings(id,value) values(?,?)", (
         'ola_salary_rates', json.dumps({'default_rate': 9, 'months': {}}, ensure_ascii=False)))
@@ -101,7 +104,7 @@ def main():
     password = Path(args.password_file).read_text().strip()
     conn.execute('insert into users(id,email,password_hash) values(?,?,?)', (secrets.token_hex(16), args.email.lower(), encode_password(password)))
     conn.commit()
-    for table in ('clients','suppliers','orders','order_items','transactions','product_custom','product_hidden','app_settings','audit_log'):
+    for table in ('clients','suppliers','orders','order_items','transactions','salary_payments','product_custom','product_hidden','app_settings','audit_log'):
         print(f'{table}: {conn.execute(f"select count(*) from {table}").fetchone()[0]}')
     print('integrity:', conn.execute('pragma integrity_check').fetchone()[0])
     conn.close()

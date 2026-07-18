@@ -19,10 +19,10 @@ PORT = int(os.environ.get("CRM_PORT", "8765"))
 SESSION_TTL = 30 * 24 * 3600
 SECURE_COOKIE = os.environ.get("CRM_SECURE_COOKIE", "0") == "1"
 LOGIN_ATTEMPTS = {}
-TABLES = {"clients", "suppliers", "orders", "order_items", "transactions", "product_custom", "product_hidden", "app_settings", "audit_log"}
+TABLES = {"clients", "suppliers", "orders", "order_items", "transactions", "salary_payments", "product_custom", "product_hidden", "app_settings", "audit_log"}
 WRITABLE = TABLES - {"audit_log"}
 JSON_COLS = {"address_data", "value", "old_value", "new_value"}
-EVENT_COLS = {"clients", "suppliers", "orders", "transactions", "app_settings"}
+EVENT_COLS = {"clients", "suppliers", "orders", "transactions", "salary_payments", "app_settings"}
 
 
 def db():
@@ -252,7 +252,15 @@ class Handler(BaseHTTPRequestHandler):
                                 if existing:
                                     created.append(row_dict(existing))
                                     continue
-                        if table in {"clients", "suppliers", "transactions"} and clean.get("id") is not None:
+                        if table == "salary_payments":
+                            self.validate_salary_payment(clean)
+                            key = clean.get("idempotency_key")
+                            if key:
+                                existing = conn.execute("select * from salary_payments where idempotency_key=?", (key,)).fetchone()
+                                if existing:
+                                    created.append(row_dict(existing))
+                                    continue
+                        if table in {"clients", "suppliers", "transactions", "salary_payments"} and clean.get("id") is not None:
                             occupied = conn.execute(f"select 1 from {table} where id=?", (clean["id"],)).fetchone()
                             if occupied:
                                 clean["id"] = conn.execute(f"select coalesce(max(id),0)+1 from {table}").fetchone()[0]
@@ -273,6 +281,10 @@ class Handler(BaseHTTPRequestHandler):
                         merged = row_dict(old)
                         merged.update(clean)
                         self.validate_transaction(conn, merged)
+                    if table == "salary_payments":
+                        merged = row_dict(old)
+                        merged.update(clean)
+                        self.validate_salary_payment(merged)
                     if "version" in old.keys():
                         clean["version"] = old["version"] + 1
                         clean["updated_at"] = now()
@@ -344,6 +356,23 @@ class Handler(BaseHTTPRequestHandler):
             )}
             if tx.get("entity_type") != "supplier" or tx.get("entity_id") not in supplier_ids:
                 raise ValueError("Платёж поставщику не соответствует поставщику заказа")
+
+    @staticmethod
+    def validate_salary_payment(payment):
+        if payment.get("employee_key") != "olya":
+            raise ValueError("Неизвестный сотрудник")
+        if float(payment.get("amount") or 0) <= 0:
+            raise ValueError("Сумма выплаты должна быть больше нуля")
+        month = str(payment.get("salary_month") or "")
+        date = str(payment.get("date") or "")
+        try:
+            datetime.strptime(month + "-01", "%Y-%m-%d")
+        except ValueError:
+            raise ValueError("Некорректный месяц зарплаты")
+        try:
+            datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError("Некорректная дата выплаты")
 
     def create_order(self, req, user):
         order = dict(req.get("order") or {})
