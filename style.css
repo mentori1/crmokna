@@ -471,6 +471,9 @@ body.modal-open { overflow: hidden; }
 .btn-success:hover { background: var(--green-700); }
 .btn-danger  { background: var(--red-500); color: #fff; }
 .btn-danger:hover { background: var(--red-600); }
+.btn-delivery { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+.btn-delivery:hover { background: #ffedd5; border-color: #fb923c; }
+.btn-delivery-added { background: var(--green-50); color: var(--green-700); border: 1px solid var(--green-100); cursor: default; }
 
 /* Две кнопки в ячейке действий (Карточка + Удалить) */
 .row-actions { display: flex; gap: 6px; white-space: nowrap; }
@@ -499,20 +502,6 @@ body.modal-open { overflow: hidden; }
     margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
 }
 .section-header .section-title { margin-bottom: 0; }
-
-/* ─── Period selector ─────────────────────────────────── */
-
-.period-selector {
-    display: flex; gap: 4px; margin-bottom: 20px;
-    background: var(--slate-200); border-radius: 8px; padding: 3px;
-    width: fit-content;
-}
-.period-btn {
-    padding: 6px 16px; border: none; border-radius: 6px;
-    background: transparent; font-size: 13px; font-weight: 500;
-    color: var(--slate-600); cursor: pointer; transition: all .15s;
-}
-.period-btn.active { background: #fff; color: var(--slate-900); box-shadow: var(--shadow); }
 
 /* ─── Лента месяцев (раздел «Заказы») ─────────────────── */
 
@@ -613,28 +602,7 @@ body.modal-open { overflow: hidden; }
 }
 .card-header h3 { font-size: 15px; font-weight: 600; }
 
-.dashboard-row {
-    display: flex; gap: 16px; margin-bottom: 16px;
-}
 .card-half { flex: 1; min-width: 0; }
-
-.chart-container { position: relative; height: 220px; }
-
-/* ─── Mini table (dashboard) ──────────────────────────── */
-
-.mini-table { width: 100%; border-collapse: collapse; }
-.mini-table th {
-    text-align: left; padding: 6px 10px;
-    font-size: 11px; font-weight: 600;
-    color: var(--slate-400); text-transform: uppercase;
-    letter-spacing: .5px; border-bottom: 1px solid var(--slate-100);
-}
-.mini-table td {
-    padding: 8px 10px; font-size: 13px;
-    border-bottom: 1px solid var(--slate-50);
-}
-.mini-table tr:last-child td { border-bottom: none; }
-.mini-table tr:hover td { background: var(--slate-50); }
 
 /* ─── Data tables ─────────────────────────────────────── */
 
@@ -686,15 +654,6 @@ body.modal-open { overflow: hidden; }
 .badge-to_warehouse      { background: #e0f2fe; color: #0284c7; }
 .badge-to_client         { background: #fff7ed; color: #ea580c; }
 
-/* Выпадающий выбор статуса прямо в таблице заказов (выглядит как бейдж) */
-.order-status-select {
-    font-size: 12px; font-weight: 600; padding: 4px 6px;
-    border: 1px solid transparent; border-radius: 999px;
-    width: 100%; cursor: pointer; -webkit-appearance: none; appearance: none;
-    background-image: none; text-overflow: ellipsis;
-}
-.order-status-select:hover { border-color: rgba(0,0,0,.12); }
-
 /* Заказы: пропорциональная раскладка использует всю ширину без пустого провала */
 #ordersTable { table-layout: fixed; width: 100%; min-width: 1000px; }
 #ordersTable th, #ordersTable td { padding-left: 9px; padding-right: 9px; }
@@ -706,13 +665,21 @@ body.modal-open { overflow: hidden; }
 #ordersTable th:nth-child(6),  #ordersTable td:nth-child(6)  { width: 8%; }
 #ordersTable th:nth-child(7),  #ordersTable td:nth-child(7)  { width: 7%; }
 #ordersTable th:nth-child(8),  #ordersTable td:nth-child(8)  { width: 10%; }
-#ordersTable th:nth-child(9),  #ordersTable td:nth-child(9)  { width: 17%; word-break: break-word; }
+#ordersTable th:nth-child(9),  #ordersTable td:nth-child(9)  { width: 16%; word-break: break-word; }
 #ordersTable th:nth-child(10), #ordersTable td:nth-child(10) { width: 12%; white-space: nowrap; }
-#ordersTable th:nth-child(11), #ordersTable td:nth-child(11) { width: 8%; white-space: nowrap; padding-right: 12px; }
+#ordersTable th:nth-child(11), #ordersTable td:nth-child(11) { width: 9%; white-space: nowrap; padding-right: 12px; }
 #ordersTable th:nth-child(9), #ordersTable td:nth-child(9),
 #ordersTable th:nth-child(10), #ordersTable td:nth-child(10) {
     border-left: 1px solid var(--slate-200);
 }
+/* Доставка: контакты, остаток и служебная кнопка удаления */
+#deliveryTable { table-layout: fixed; width: 100%; min-width: 680px; }
+#deliveryTable th:nth-child(1), #deliveryTable td:nth-child(1) { width: 14%; }
+#deliveryTable th:nth-child(2), #deliveryTable td:nth-child(2) { width: 18%; }
+#deliveryTable th:nth-child(3), #deliveryTable td:nth-child(3) { width: 20%; white-space: nowrap; }
+#deliveryTable th:nth-child(4), #deliveryTable td:nth-child(4) { width: 40%; white-space: normal; word-break: break-word; }
+#deliveryTable th:nth-child(5), #deliveryTable td:nth-child(5) { width: 8%; }
+.delivery-print-meta { display: none; }
 
 .badge-income  { background: var(--green-100); color: var(--green-700); }
 .badge-expense { background: var(--red-100);   color: var(--red-600); }
@@ -893,6 +860,30 @@ body.modal-open { overflow: hidden; }
 .payment-fill.red   { background: var(--red-500); }
 .payment-pct { font-size: 12px; font-weight: 600; min-width: 36px; }
 
+.compact-finance-title { margin-top: 14px; }
+.compact-finance-grid {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;
+}
+.compact-finance-item {
+    min-width: 0; padding: 10px 12px; border-radius: 8px;
+    background: var(--slate-50); border: 1px solid var(--slate-200);
+}
+.compact-finance-item span,
+.compact-finance-item small { display: block; font-size: 10px; color: var(--slate-500); }
+.compact-finance-item b { display: block; margin: 2px 0; font-size: 15px; white-space: nowrap; }
+.compact-finance-item.has-debt { border-color: var(--red-100); background: var(--red-50); }
+.compact-finance-item.has-debt small { color: var(--red-600); }
+.compact-finance-item.is-paid { border-color: var(--green-100); background: var(--green-50); }
+.compact-finance-item.is-paid small { color: var(--green-700); }
+.compact-payment-form {
+    display: grid; grid-template-columns: 110px 150px 150px minmax(150px, 1fr) auto;
+    gap: 8px; align-items: end; margin-top: 10px;
+    padding: 10px; background: var(--slate-50); border-radius: 8px;
+}
+.compact-payment-form .form-group input,
+.compact-payment-form .form-group select { padding: 8px 9px; }
+.compact-payment-form > .btn { height: 36px; }
+
 /* ─── Responsive ──────────────────────────────────────── */
 
 @media (max-width: 860px) {
@@ -904,7 +895,6 @@ body.modal-open { overflow: hidden; }
     .sidebar.open { transform: translateX(0); }
     .sidebar-toggle { display: block; }
     .main { margin-left: 0; }
-    .dashboard-row { flex-direction: column; }
     .form-grid { grid-template-columns: 1fr; }
     .detail-grid { grid-template-columns: 1fr; }
     .metrics-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
@@ -948,13 +938,6 @@ body.modal-open { overflow: hidden; }
     .metric-label { font-size: 10px; margin-bottom: 3px; }
     .metric-value { font-size: 18px; }
     .metric-sub { font-size: 11px; }
-
-    /* Кнопки периода — горизонтальная прокрутка, не сжимаются */
-    .period-selector {
-        width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;
-        flex-wrap: nowrap;
-    }
-    .period-btn { white-space: nowrap; flex: 0 0 auto; }
 
     /* Заголовок секции + кнопка в столбик, кнопка во всю ширину */
     .section-header { flex-direction: column; align-items: stretch; }
@@ -1116,7 +1099,29 @@ body.modal-open { overflow: hidden; }
     .pagination { flex-direction: column; align-items: stretch; gap: 10px; }
     .pagination-controls { justify-content: center; }
 
-    .chart-container { height: 220px; }
+    .compact-finance-grid { grid-template-columns: 1fr 1fr; }
+    .compact-payment-form { grid-template-columns: 1fr; }
+}
+
+@media print {
+    @page { size: A4 portrait; margin: 14mm; }
+    body { display: block; background: #fff; color: #000; }
+    .sidebar, .sidebar-backdrop, .topbar, .no-print, #dbToast { display: none !important; }
+    .main { margin: 0 !important; min-height: 0; }
+    .content { padding: 0 !important; }
+    .section { display: none !important; }
+    #section-delivery { display: block !important; }
+    #section-delivery .section-title { font-size: 22px; margin: 0; }
+    .delivery-section-header { margin-bottom: 4px; }
+    .delivery-print-meta { display: block; margin-bottom: 14px; font-size: 12px; color: #475569; }
+    #deliveryTable { min-width: 0; box-shadow: none; border: 1px solid #94a3b8; }
+    #deliveryTable th, #deliveryTable td { padding: 9px 8px; color: #000; border: 1px solid #cbd5e1; }
+    #deliveryTable th:nth-child(1), #deliveryTable td:nth-child(1) { width: 16%; }
+    #deliveryTable th:nth-child(2), #deliveryTable td:nth-child(2) { width: 20%; }
+    #deliveryTable th:nth-child(3), #deliveryTable td:nth-child(3) { width: 22%; }
+    #deliveryTable th:nth-child(4), #deliveryTable td:nth-child(4) { width: 42%; }
+    #deliveryTable tbody tr { break-inside: avoid; }
+    #deliveryTable tbody tr:hover td { background: #fff; }
 }
 
 /* ─── Форма «Добавить платёж» в карточке заказа ───────── */

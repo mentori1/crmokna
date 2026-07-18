@@ -58,6 +58,13 @@ def main():
     assert order['order_items'][0]['sale_price'] == 10000
     print('order_totals: revenue=10000 margin=7000 client_debt=10000 supplier_debt=3000')
 
+    delivery = call('/api/query', {'table':'orders','action':'update','filters':[
+        {'column':'id','op':'eq','value':order_id},{'column':'version','op':'eq','value':order['version']}],
+        'values':{'delivery_status':'manual'}})['data']
+    assert delivery['delivery_status'] == 'manual'
+    order['version'] = delivery['version']
+    print('manual_delivery_queue: yes')
+
     expense_key = str(uuid.uuid4())
     expense = {'id':990000001,'date':'2026-07-13','type':'expense','entity_type':'supplier',
                'entity_id':supplier_id,'order_id':order_id,'amount':3000,

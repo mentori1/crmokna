@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Центр окон и дверей — CRM</title>
-    <link rel="stylesheet" href="style.css?v=54">
+    <link rel="stylesheet" href="style.css?v=57">
 </head>
 <body>
 
@@ -75,9 +75,9 @@
         </span>
     </div>
     <nav class="sidebar-nav">
-        <a href="#" class="nav-item active" data-section="dashboard">
-            <span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg></span>
-            <span class="nav-label">Дашборд</span>
+        <a href="#" class="nav-item active" data-section="delivery">
+            <span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.5h11v9h-11z"/><path d="M13.5 9.5h3.8l3.2 3.2v2.8h-7z"/><circle cx="6.5" cy="18" r="1.7"/><circle cx="17" cy="18" r="1.7"/></svg></span>
+            <span class="nav-label">Доставка</span>
         </a>
         <a href="#" class="nav-item" data-section="orders">
             <span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 3.5V2.8a1 1 0 011-1h4a1 1 0 011 1v.7"/><path d="M8.5 9.5h7M8.5 13h7M8.5 16.5h4.5"/></svg></span>
@@ -145,45 +145,27 @@
     <!-- Content sections -->
     <main class="content">
 
-        <!-- ─── Dashboard ─── -->
-        <section class="section active" id="section-dashboard">
-            <h1 class="section-title">Дашборд</h1>
-            <div class="period-selector">
-                <button class="period-btn" data-period="30">30 дней</button>
-                <button class="period-btn" data-period="90">Квартал</button>
-                <button class="period-btn" data-period="180">Полгода</button>
-                <button class="period-btn" data-period="365">Год</button>
-                <button class="period-btn active" data-period="all">Всё время</button>
+        <!-- ─── Delivery ─── -->
+        <section class="section active" id="section-delivery">
+            <div class="section-header delivery-section-header">
+                <h1 class="section-title">Доставка</h1>
+                <button class="btn btn-primary no-print" id="btnPrintDelivery">Распечатать</button>
             </div>
-            <div class="metrics-grid" id="dashMetrics"></div>
-            <div class="dashboard-row">
-                <div class="card card-half">
-                    <div class="card-header">
-                        <h3>Последние заказы</h3>
-                        <a href="#" class="link" data-section="orders">Все заказы →</a>
-                    </div>
-                    <div id="dashRecentOrders"></div>
-                </div>
-                <div class="card card-half">
-                    <div class="card-header">
-                        <h3>Ближайшие доставки</h3>
-                    </div>
-                    <div id="dashUpcoming"></div>
-                </div>
-            </div>
-            <div class="dashboard-row">
-                <div class="card card-half">
-                    <div class="card-header"><h3>Выручка по месяцам</h3></div>
-                    <div class="chart-container">
-                        <canvas id="revenueChart"></canvas>
-                    </div>
-                </div>
-                <div class="card card-half">
-                    <div class="card-header"><h3>Заказы по статусам</h3></div>
-                    <div class="chart-container">
-                        <canvas id="statusChart"></canvas>
-                    </div>
-                </div>
+            <p class="text-muted no-print" style="margin:-12px 0 20px">Сюда менеджер вручную добавляет заказы кнопкой «В доставку».</p>
+            <div class="delivery-print-meta">Лист доставки · <span id="deliveryPrintDate"></span></div>
+            <div class="table-wrapper">
+                <table class="data-table" id="deliveryTable">
+                    <thead>
+                        <tr>
+                            <th>№ заказа</th>
+                            <th>Осталось получить</th>
+                            <th>Телефон</th>
+                            <th>Адрес</th>
+                            <th class="no-print"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="deliveryBody"></tbody>
+                </table>
             </div>
         </section>
 
@@ -231,7 +213,7 @@
                                     <th>Продажа</th>
                                     <th>Получено</th>
                                     <th>Осталось</th>
-                                    <th>Статус</th>
+                                    <th>Доставка</th>
                                     <th>Клиент</th>
                                     <th>Телефон</th>
                                     <th></th>
@@ -407,8 +389,7 @@
     </div>
 </div>
 
-<script src="assets/chart.umd.min.js?v=4.5.0"></script>
 <script src="supabase-local.js?v=54"></script>
-<script src="app.js?v=55"></script>
+<script src="app.js?v=57"></script>
 </body>
 </html>

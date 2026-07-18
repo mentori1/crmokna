@@ -168,6 +168,10 @@ async function execOp(op) {
         }
         if (op.t === 'insTx' && op._rowRef) {
             op._rowRef._pending = false;
+            const modalBody = document.getElementById('modalBody');
+            if (modalBody?.dataset.orderDetail === String(op._rowRef.order_id)) {
+                openOrderDetail(op._rowRef.order_id);
+            }
             rerenderActiveSection();
         }
         return 'ok';
@@ -644,7 +648,7 @@ const navItems = document.querySelectorAll('.nav-item');
 const sections = document.querySelectorAll('.section');
 
 function navigate(sectionId) {
-    if (!document.getElementById('section-' + sectionId)) sectionId = 'dashboard';
+    if (!document.getElementById('section-' + sectionId)) sectionId = 'delivery';
     navItems.forEach(n => n.classList.toggle('active', n.dataset.section === sectionId));
     sections.forEach(s => s.classList.toggle('active', s.id === 'section-' + sectionId));
     if (location.hash !== '#' + sectionId) location.hash = sectionId;
@@ -652,7 +656,7 @@ function navigate(sectionId) {
     closeSidebarMobile();
 }
 window.addEventListener('hashchange', () => {
-    const id = location.hash.replace('#', '') || 'dashboard';
+    const id = location.hash.replace('#', '') || 'delivery';
     navigate(id);
 });
 
@@ -675,16 +679,6 @@ if (_backdrop) _backdrop.addEventListener('click', () => {
     document.getElementById('sidebar').classList.remove('open');
 });
 
-// Кнопки периода на дашборде
-document.querySelectorAll('.period-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        window.dashPeriod = btn.dataset.period;
-        renderDashboard();
-    });
-});
-
 // На телефоне: после выбора раздела прячем боковое меню
 function closeSidebarMobile() {
     if (window.innerWidth <= 860) {
@@ -694,7 +688,7 @@ function closeSidebarMobile() {
 
 function renderSection(id) {
     switch (id) {
-        case 'dashboard':  renderDashboard(); break;
+        case 'delivery':   renderDelivery(); break;
         case 'orders':     renderOrders(); break;
         case 'clients':    renderClients(); break;
         case 'suppliers':  renderSuppliers(); break;
@@ -705,186 +699,60 @@ function renderSection(id) {
 }
 
 
-// ─── Dashboard ───────────────────────────────────────────────
+// ─── Delivery ────────────────────────────────────────────────
 
-let revenueChart, statusChart;
+function renderDelivery() {
+    const rows = orders
+        .filter(o => o.delivery_status === 'manual')
+        .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
 
-// Текущий выбранный период дашборда ('30'|'90'|'180'|'365'|'all')
-window.dashPeriod = 'all';
+    const printDate = document.getElementById('deliveryPrintDate');
+    if (printDate) printDate.textContent = new Date().toLocaleString('ru-RU', { dateStyle: 'long', timeStyle: 'short' });
+    const printButton = document.getElementById('btnPrintDelivery');
+    if (printButton) printButton.disabled = rows.length === 0;
 
-const PERIOD_LABELS = { '30': 'за 30 дней', '90': 'за квартал', '180': 'за полгода', '365': 'за год', 'all': 'за всё время' };
-
-// Граница периода: ISO-дата начала окна (или null для «всё время»)
-function periodStartDate(period) {
-    if (period === 'all') return null;
-    const d = new Date();
-    d.setDate(d.getDate() - parseInt(period, 10));
-    return d.toISOString().slice(0, 10);
-}
-
-function renderDashboard() {
-    const period = window.dashPeriod;
-    const since = periodStartDate(period);
-    const inPeriod = o => !since || (o.created_at && o.created_at >= since);
-    const periodOrders = orders.filter(inPeriod);
-
-    // Заказы/выручка/прибыль — за период; долги — текущие (остаток на сейчас, по всем заказам)
-    let totalRevenue = 0, totalProfit = 0;
-    periodOrders.forEach(o => {
+    document.getElementById('deliveryBody').innerHTML = rows.length ? rows.map(o => {
         const c = calcOrder(o);
-        totalRevenue += c.totalSale;
-        totalProfit += c.margin;
-    });
-    let totalClientDebt = 0, totalSupplierDebt = 0;
-    orders.forEach(o => {
-        const c = calcOrder(o);
-        totalClientDebt += Math.max(0, c.clientDebt);
-        totalSupplierDebt += Math.max(0, c.supplierDebt);
-    });
-    const label = PERIOD_LABELS[period];
+        const client = clients.find(x => x.id === o.client_id) || {};
+        const label = o.order_number || crmId(o);
+        return `<tr data-order="${o.id}" style="cursor:pointer">
+            <td class="td-bold" data-label="№ заказа">${label}</td>
+            <td class="font-mono ${c.clientDebt > 0 ? 'text-red' : 'text-green'}" data-label="Осталось получить">${c.clientDebt > 0 ? fmtCur(c.clientDebt) : 'Оплачено'}</td>
+            <td data-label="Телефон">${client.phone || '—'}</td>
+            <td data-label="Адрес">${client.address || '—'}</td>
+            <td data-label="" class="no-print"><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();removeOrderFromDelivery(${o.id})">Убрать</button></td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="5" class="empty-state">Пока ни один заказ не добавлен в доставку</td></tr>';
 
-    document.getElementById('dashMetrics').innerHTML = `
-        <div class="metric-card blue">
-            <div class="metric-label">Заказов</div>
-            <div class="metric-value">${periodOrders.length}</div>
-            <div class="metric-sub">${label}</div>
-        </div>
-        <div class="metric-card green">
-            <div class="metric-label">Выручка</div>
-            <div class="metric-value">${fmtCur(totalRevenue)}</div>
-            <div class="metric-sub">${label}</div>
-        </div>
-        <div class="metric-card cyan">
-            <div class="metric-label">Прибыль</div>
-            <div class="metric-value">${fmtCur(totalProfit)}</div>
-            <div class="metric-sub">${label}</div>
-        </div>
-        <div class="metric-card amber">
-            <div class="metric-label">Долг клиентов</div>
-            <div class="metric-value">${fmtCur(totalClientDebt)}</div>
-            <div class="metric-sub">текущий остаток</div>
-        </div>
-        <div class="metric-card red">
-            <div class="metric-label">Долг поставщикам</div>
-            <div class="metric-value">${fmtCur(totalSupplierDebt)}</div>
-            <div class="metric-sub">текущий остаток</div>
-        </div>
-    `;
-
-    const recent = [...orders].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 5);
-    document.getElementById('dashRecentOrders').innerHTML = `
-        <table class="mini-table">
-            <thead><tr><th>№</th><th>Клиент</th><th>Сумма</th><th>Статус</th></tr></thead>
-            <tbody>${recent.map(o => {
-                const c = calcOrder(o);
-                return `<tr data-order="${o.id}" style="cursor:pointer">
-                    <td class="td-bold">${o.order_number}</td>
-                    <td>${clientName(o.client_id)}</td>
-                    <td class="font-mono">${fmtCur(c.totalSale)}</td>
-                    <td><span class="badge badge-${o.status}">${statusLabel(o.status)}</span></td>
-                </tr>`;
-            }).join('')}</tbody>
-        </table>`;
-
-    document.getElementById('dashRecentOrders').querySelectorAll('tr[data-order]').forEach(tr => {
+    document.querySelectorAll('#deliveryBody tr[data-order]').forEach(tr => {
         tr.addEventListener('click', () => openOrderDetail(+tr.dataset.order));
     });
-
-    const upcoming = orders
-        .filter(o => !['closed','delivered'].includes(o.status) && o.delivery_date)
-        .sort((a, b) => a.delivery_date.localeCompare(b.delivery_date))
-        .slice(0, 5);
-    document.getElementById('dashUpcoming').innerHTML = upcoming.length ? `
-        <table class="mini-table">
-            <thead><tr><th>Доставка</th><th>Заказ</th><th>Клиент</th><th>Статус</th></tr></thead>
-            <tbody>${upcoming.map(o => `
-                <tr data-order="${o.id}" style="cursor:pointer">
-                    <td class="td-bold">${fmtDate(o.delivery_date)}</td>
-                    <td>${o.order_number}</td>
-                    <td>${clientName(o.client_id)}</td>
-                    <td><span class="badge badge-${o.status}">${statusLabel(o.status)}</span></td>
-                </tr>`).join('')}</tbody>
-        </table>` : '<div class="empty-state">Нет запланированных доставок</div>';
-
-    document.getElementById('dashUpcoming').querySelectorAll('tr[data-order]').forEach(tr => {
-        tr.addEventListener('click', () => openOrderDetail(+tr.dataset.order));
-    });
-
-    renderCharts();
 }
 
-function renderCharts() {
-    // Группируем заказы по месяцам и берём последние 12 месяцев с активностью
-    const MONTH_NAMES = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
-    const buckets = {};
-    orders.forEach(o => {
-        const m = o.created_at.slice(0, 7);
-        if (!buckets[m]) buckets[m] = { rev: 0, prof: 0 };
-        const c = calcOrder(o);
-        buckets[m].rev += c.totalSale;
-        buckets[m].prof += c.margin;
-    });
-    const months = Object.keys(buckets).sort().slice(-12);
-    const monthLabels = months.map(m => {
-        const [y, mm] = m.split('-');
-        return `${MONTH_NAMES[+mm - 1]} ${y.slice(2)}`;
-    });
-    const revenueByMonth = months.map(m => buckets[m].rev);
-    const profitByMonth  = months.map(m => buckets[m].prof);
+window.moveOrderToDelivery = async function(orderId) {
+    const o = orders.find(x => x.id === orderId);
+    if (!o || o.delivery_status === 'manual') return;
+    const ok = await sbUpdateOrder(o, { delivery_status: 'manual' });
+    if (!ok) return;
+    o.delivery_status = 'manual';
+    renderOrders();
+    dbToast('Заказ добавлен в доставку', true);
+};
 
-    if (revenueChart) revenueChart.destroy();
-    const ctx1 = document.getElementById('revenueChart').getContext('2d');
-    revenueChart = new Chart(ctx1, {
-        type: 'bar',
-        data: {
-            labels: monthLabels,
-            datasets: [
-                { label: 'Выручка', data: revenueByMonth, backgroundColor: '#3b82f6', borderRadius: 4 },
-                { label: 'Прибыль', data: profitByMonth, backgroundColor: '#22c55e', borderRadius: 4 },
-            ]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom', labels: { font: { size: 12 } } } },
-            scales: {
-                y: { ticks: { callback: v => fmt(v) + ' ₽' }, grid: { color: '#f1f5f9' } },
-                x: { grid: { display: false } }
-            }
-        }
-    });
+window.removeOrderFromDelivery = async function(orderId) {
+    const o = orders.find(x => x.id === orderId);
+    if (!o) return;
+    const ok = await sbUpdateOrder(o, { delivery_status: null });
+    if (!ok) return;
+    o.delivery_status = null;
+    renderDelivery();
+    dbToast('Заказ убран из доставки', true);
+};
 
-    // Считаем по фактически встречающимся статусам (новые + старые)
-    const statusCounts = {};
-    orders.forEach(o => { const s = o.status || 'new'; statusCounts[s] = (statusCounts[s] || 0) + 1; });
-    const statusColors = {
-        new: '#3b82f6', request_sent: '#6366f1', reply_received: '#06b6d4',
-        awaiting_shipment: '#f59e0b', shipped: '#a855f7', to_warehouse: '#0ea5e9',
-        to_client: '#f97316', delivered: '#22c55e', closed: '#94a3b8',
-        in_progress: '#f59e0b', ordered_from_supplier: '#a855f7',
-        received_at_warehouse: '#06b6d4', delivering: '#f97316',
-    };
-    const statusKeys = Object.keys(statusCounts).filter(s => statusCounts[s] > 0);
-
-    if (statusChart) statusChart.destroy();
-    const ctx2 = document.getElementById('statusChart').getContext('2d');
-    statusChart = new Chart(ctx2, {
-        type: 'doughnut',
-        data: {
-            labels: statusKeys.map(statusLabel),
-            datasets: [{
-                data: statusKeys.map(s => statusCounts[s]),
-                backgroundColor: statusKeys.map(s => statusColors[s] || '#cbd5e1'),
-                borderWidth: 0, spacing: 2
-            }]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false, cutout: '60%',
-            plugins: {
-                legend: { position: 'right', labels: { font: { size: 12 }, padding: 12, usePointStyle: true, pointStyleWidth: 10 } }
-            }
-        }
-    });
-}
+window.printDeliverySheet = function() {
+    if (!orders.some(o => o.delivery_status === 'manual')) return;
+    window.print();
+};
 
 
 // ─── Orders ──────────────────────────────────────────────────
@@ -973,29 +841,18 @@ function renderOrders() {
             <td class="font-mono text-right" data-label="Продажа">${fmtCur(c.totalSale)}</td>
             <td class="font-mono text-right" data-label="Получено">${fmtCur(c.paidByClient)}</td>
             <td class="font-mono text-right ${c.clientDebt > 0 ? 'text-red' : ''}" data-label="Осталось">${c.clientDebt > 0 ? fmtCur(c.clientDebt) : '—'}</td>
-            <td data-label="Статус">
-                <select class="order-status-select badge-${o.status}" data-order="${o.id}" onclick="event.stopPropagation()">
-                    ${STATUS_COMPAT[o.status] ? `<option value="${o.status}" selected>${statusLabel(o.status)}</option>` : ''}
-                    ${Object.entries(STATUS_LABELS).map(([k, v]) => `<option value="${k}" ${o.status === k ? 'selected' : ''}>${v}</option>`).join('')}
-                </select>
+            <td data-label="Доставка">
+                <button class="btn btn-sm ${o.delivery_status === 'manual' ? 'btn-delivery-added' : 'btn-delivery'}"
+                    ${o.delivery_status === 'manual' ? 'disabled' : ''}
+                    onclick="event.stopPropagation();moveOrderToDelivery(${o.id})">
+                    ${o.delivery_status === 'manual' ? 'В доставке' : 'В доставку'}
+                </button>
             </td>
             <td data-label="Клиент">${clientName(o.client_id)}</td>
             <td data-label="Телефон">${clientPhone(o.client_id) || '—'}</td>
             <td data-label=""><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openOrderDetail(${o.id})">Открыть</button></td>
         </tr>`;
     }).join('') : '<tr><td colspan="11" class="empty-state">Нет заказов</td></tr>';
-
-    // Смена статуса прямо из списка
-    document.querySelectorAll('#ordersBody .order-status-select').forEach(sel => {
-        sel.addEventListener('change', e => {
-            e.stopPropagation();
-            const o = orders.find(x => x.id === +sel.dataset.order);
-            if (!o) return;
-            o.status = sel.value;
-            sel.className = 'order-status-select badge-' + o.status;
-            sbUpdateOrder(o, { status: o.status });
-        });
-    });
 
     // Пагинация
     let pagBox = document.getElementById('ordersPagination');
@@ -1020,7 +877,6 @@ function renderOrders() {
 
     document.querySelectorAll('#ordersBody tr[data-order]').forEach(tr => {
         tr.addEventListener('click', e => {
-            if (e.target.closest('.order-status-select')) return;   // клик по статусу — не открываем карточку
             openOrderDetail(+tr.dataset.order);
         });
     });
@@ -1034,6 +890,7 @@ function renderOrders() {
 document.getElementById('filterStatus').addEventListener('change', renderOrders);
 document.getElementById('filterDateFrom').addEventListener('change', renderOrders);
 document.getElementById('filterDateTo').addEventListener('change', renderOrders);
+document.getElementById('btnPrintDelivery').addEventListener('click', printDeliverySheet);
 
 
 // ─── Order Detail Modal ──────────────────────────────────────
@@ -1120,66 +977,47 @@ function openOrderDetail(orderId) {
             </tbody>
         </table>
 
-        <div class="detail-section-title">Финансы</div>
-        <div class="detail-grid">
-            <div class="detail-item">
-                <div class="detail-label">Закупочная цена</div>
-                <div class="detail-value">${fmtCur(c.totalPurchase)}</div>
+        <div class="detail-section-title compact-finance-title">Финансы</div>
+        <div class="compact-finance-grid">
+            <div class="compact-finance-item">
+                <span>Продажа</span><b>${fmtCur(c.totalSale)}</b>
             </div>
-            <div class="detail-item">
-                <div class="detail-label">Цена продажи</div>
-                <div class="detail-value">${fmtCur(c.totalSale)}</div>
+            <div class="compact-finance-item">
+                <span>Закупка</span><b>${fmtCur(c.totalPurchase)}</b>
             </div>
-            <div class="detail-item">
-                <div class="detail-label">Маржа (продажа − закупка)</div>
-                <div class="detail-value big ${c.margin >= 0 ? 'text-green' : 'text-red'}">${fmtCur(c.margin)}</div>
+            <div class="compact-finance-item ${c.clientDebt > 0 ? 'has-debt' : 'is-paid'}">
+                <span>Клиент внёс</span><b>${fmtCur(c.paidByClient)}</b>
+                <small>${c.clientDebt > 0 ? 'Осталось ' + fmtCur(c.clientDebt) : 'Оплачено полностью'}</small>
             </div>
-            <div class="detail-item">
-                <div class="detail-label">Маржинальность</div>
-                <div class="detail-value big">${c.totalSale > 0 ? Math.round(c.margin / c.totalSale * 100) : 0}%</div>
+            <div class="compact-finance-item ${c.supplierDebt > 0 ? 'has-debt' : 'is-paid'}">
+                <span>Поставщикам</span><b>${fmtCur(c.paidToSupplier)}</b>
+                <small>${c.supplierDebt > 0 ? 'Осталось ' + fmtCur(c.supplierDebt) : 'Оплачено полностью'}</small>
             </div>
         </div>
 
-        <div style="margin-top:12px">
-            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
-                <span>Оплата клиентом: <b>${fmtCur(c.paidByClient)}</b> из ${fmtCur(c.totalSale)}</span>
-                <span class="${c.clientDebt > 0 ? 'text-red' : 'text-green'}">${c.clientDebt > 0 ? 'Долг: ' + fmtCur(c.clientDebt) : 'Оплачено'}</span>
-            </div>
-            ${paymentBar(c.paidByClient, c.totalSale)}
-        </div>
-
-        <div style="margin-top:12px">
-            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
-                <span>Оплачено поставщику: <b>${fmtCur(c.paidToSupplier)}</b> из ${fmtCur(c.totalPurchase)}</span>
-                <span class="${c.supplierDebt > 0 ? 'text-red' : 'text-green'}">${c.supplierDebt > 0 ? 'Долг: ' + fmtCur(c.supplierDebt) : 'Оплачено'}</span>
-            </div>
-            ${paymentBar(c.paidToSupplier, c.totalPurchase)}
-        </div>
-
-        <div class="detail-section-title">Добавить платёж</div>
-        <div class="payment-form">
+        <div class="compact-payment-form">
             <div class="form-group">
                 <label>Сумма ₽</label>
                 <input type="number" id="paymentAmount" placeholder="10 000" min="0" step="any">
             </div>
             <div class="form-group">
-                <label>Тип</label>
+                <label>Тип платежа</label>
                 <select id="paymentType" onchange="togglePaymentSupplier()">
-                    <option value="income">Оплата от клиента</option>
-                    <option value="expense">Оплата поставщику</option>
+                    <option value="income">От клиента</option>
+                    <option value="expense">Поставщику</option>
                 </select>
             </div>
             <div class="form-group" id="paymentSupplierWrap" style="display:none">
-                <label>Поставщик заказа</label>
+                <label>Поставщик</label>
                 <select id="paymentSupplier">
                     ${supplierIds.map(id => `<option value="${id}">${supplierName(id)}</option>`).join('')}
                 </select>
             </div>
-            <div class="form-group">
+            <div class="form-group compact-payment-desc">
                 <label>Описание</label>
-                <input type="text" id="paymentDesc" placeholder="Предоплата / остаток / и т.д.">
+                <input type="text" id="paymentDesc" placeholder="Предоплата / остаток">
             </div>
-            <button class="btn btn-primary payment-submit" onclick="addPayment(${o.id})">+ Добавить платёж</button>
+            <button class="btn btn-primary" onclick="addPayment(${o.id})">Добавить платёж</button>
         </div>
 
         <div class="form-actions" style="margin-top:24px">
@@ -1193,6 +1031,8 @@ function openOrderDetail(orderId) {
             <button class="btn btn-success" onclick="changeOrderStatus(${o.id})">Сохранить статус</button>
         </div>
     `);
+    const modalBody = document.getElementById('modalBody');
+    modalBody.dataset.orderDetail = String(o.id);
 }
 
 // Редактирование существующего заказа: ФИО клиента, телефон, продукция, поставщик
@@ -1378,7 +1218,7 @@ window.addPayment = function(orderId) {
     };
     transactions.push(tx);
     sbInsertTransaction(tx);        // сохраняем платёж в Supabase
-    // Перерисовываем карточку (текущая модалка) И активную секцию под ней (Дашборд / Заказы / Финансы / Клиенты / Поставщики)
+    // Обновляем компактный финансовый блок в карточке и активный раздел под ним.
     openOrderDetail(o.id);
     rerenderActiveSection();
 };
@@ -2782,7 +2622,21 @@ document.addEventListener('click', e => {
     if (dd && dd.classList.contains('open') && !e.target.closest('.notif-wrap')) dd.classList.remove('open');
 });
 
-// Живое форматирование телефона (+7 подставляется само) во всех полях .phone-input
+// Backspace в конце форматированного телефона всегда удаляет именно одну цифру,
+// а не скобку/дефис, которые форматтер тут же возвращал обратно.
+document.addEventListener('beforeinput', e => {
+    const t = e.target;
+    if (!t?.classList?.contains('phone-input') || e.inputType !== 'deleteContentBackward') return;
+    if (t.selectionStart !== t.selectionEnd || t.selectionEnd !== t.value.length) return;
+    e.preventDefault();
+    let digits = t.value.replace(/\D/g, '');
+    if (digits.startsWith('7')) digits = digits.slice(1);
+    digits = digits.slice(0, -1);
+    t.value = digits ? formatPhoneRu(digits) : '';
+    t.dispatchEvent(new Event('input', { bubbles: true }));
+});
+
+// Живое форматирование телефона (+7 подставляется само) во всех полях .phone-input.
 document.addEventListener('input', e => {
     const t = e.target;
     if (t && t.classList && t.classList.contains('phone-input')) {
@@ -2835,7 +2689,9 @@ document.addEventListener('input', e => {
 
 function openModal(title, bodyHTML) {
     document.getElementById('modalTitle').textContent = title;
-    document.getElementById('modalBody').innerHTML = bodyHTML;
+    const body = document.getElementById('modalBody');
+    delete body.dataset.orderDetail;
+    body.innerHTML = bodyHTML;
     document.getElementById('modalOverlay').classList.add('open');
     document.body.classList.add('modal-open');   // блокируем скролл страницы под окном
 }
@@ -2936,7 +2792,7 @@ async function loadData() {
         });
         archiveOldOrders();
         console.log(`Загружено из Supabase: ${orders.length} заказов, ${clients.length} клиентов, ${suppliers.length} поставщиков, ${transactions.length} транзакций`);
-        const initial = location.hash.replace('#', '') || 'dashboard';
+        const initial = location.hash.replace('#', '') || 'delivery';
         navigate(initial);
         renderNotifications();        // счётчик уведомлений в шапке
         subscribeRealtime();          // живая синхронизация: чужие правки видны сразу
@@ -2977,7 +2833,7 @@ function subscribeRealtime() {
                     const { order_items, ...rest } = o;
                     return { ...rest, items };
                 });
-                renderSection(location.hash.replace('#', '') || 'dashboard');
+                renderSection(location.hash.replace('#', '') || 'delivery');
             } catch (e) { console.warn('sync', e); }
             finally { refreshing = false; }
         });
