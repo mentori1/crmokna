@@ -6,6 +6,7 @@ After=network.target
 Type=simple
 User=crm
 Group=crm
+EnvironmentFile=-/etc/ovsyannikov-crm.env
 Environment=CRM_DB=/var/lib/ovsyannikov-crm/crm.db
 Environment=CRM_HOST=127.0.0.1
 Environment=CRM_PORT=8765

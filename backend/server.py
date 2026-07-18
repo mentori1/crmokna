@@ -10,15 +10,20 @@ import time
 from datetime import datetime, timezone
 from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.error import HTTPError, URLError
 from pathlib import Path
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 DB_PATH = Path(os.environ.get("CRM_DB", "/var/lib/ovsyannikov-crm/crm.db"))
 HOST = os.environ.get("CRM_HOST", "127.0.0.1")
 PORT = int(os.environ.get("CRM_PORT", "8765"))
 SESSION_TTL = 30 * 24 * 3600
 SECURE_COOKIE = os.environ.get("CRM_SECURE_COOKIE", "0") == "1"
+DADATA_TOKEN = os.environ.get("DADATA_TOKEN", "").strip()
+DADATA_SUGGEST_URL = "https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address"
 LOGIN_ATTEMPTS = {}
+ADDRESS_SUGGEST_ATTEMPTS = {}
 TABLES = {"clients", "suppliers", "orders", "order_items", "transactions", "salary_payments", "product_custom", "product_hidden", "app_settings", "audit_log"}
 WRITABLE = TABLES - {"audit_log"}
 JSON_COLS = {"address_data", "value", "old_value", "new_value"}
@@ -148,6 +153,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/query":
             return self.query(payload, user)
+        if path == "/api/address-suggest":
+            return self.address_suggest(payload, user)
         if path == "/api/rpc/create_order":
             return self.create_order(payload, user)
         if path == "/api/rpc/replace_order_items":
@@ -184,6 +191,64 @@ class Handler(BaseHTTPRequestHandler):
             with db() as conn:
                 conn.execute("delete from sessions where token=?", (jar["crm_session"].value,))
         return self.send_json(200, {"ok": True}, {"Set-Cookie": "crm_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"})
+
+    def address_suggest(self, payload, user):
+        query = str(payload.get("query", "")).strip()
+        if len(query) < 3:
+            return self.send_json(200, {"suggestions": []})
+        if len(query) > 200:
+            return self.send_json(400, {"error": "Адрес слишком длинный"})
+        if not DADATA_TOKEN:
+            return self.send_json(503, {"error": "Подсказки адреса не настроены"})
+
+        key = user.get("id") or self.client_address[0]
+        cutoff = time.time() - 60
+        attempts = [stamp for stamp in ADDRESS_SUGGEST_ATTEMPTS.get(key, []) if stamp > cutoff]
+        if len(attempts) >= 90:
+            return self.send_json(429, {"error": "Слишком много запросов адреса"})
+        attempts.append(time.time())
+        ADDRESS_SUGGEST_ATTEMPTS[key] = attempts
+
+        try:
+            count = min(max(int(payload.get("count", 7)), 1), 10)
+        except (TypeError, ValueError):
+            count = 7
+        request = Request(
+            DADATA_SUGGEST_URL,
+            data=json.dumps({"query": query, "count": count}, ensure_ascii=False).encode(),
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Authorization": "Token " + DADATA_TOKEN,
+                "User-Agent": "OvsyannikovCRM/1.0",
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=8) as response:
+                upstream = json.loads(response.read())
+        except HTTPError as exc:
+            print(f"DaData HTTP error: {exc.code}")
+            return self.send_json(502, {"error": "Сервис подсказок адреса временно недоступен"})
+        except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+            print(f"DaData request error: {type(exc).__name__}")
+            return self.send_json(502, {"error": "Сервис подсказок адреса временно недоступен"})
+
+        allowed = (
+            "region_with_type", "region", "city_with_type", "settlement_with_type", "city",
+            "street_with_type", "house", "flat", "postal_code", "geo_lat", "geo_lon", "fias_id",
+        )
+        suggestions = []
+        for item in upstream.get("suggestions", [])[:count]:
+            if not isinstance(item, dict):
+                continue
+            data = item.get("data") if isinstance(item.get("data"), dict) else {}
+            suggestions.append({
+                "value": str(item.get("value") or ""),
+                "unrestricted_value": str(item.get("unrestricted_value") or ""),
+                "data": {key: data.get(key) for key in allowed},
+            })
+        return self.send_json(200, {"suggestions": suggestions})
 
     @staticmethod
     def where(filters):

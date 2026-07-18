@@ -2,8 +2,8 @@
    CRM «Центр окон и дверей» — Application
    ============================================================ */
 
-// ─── Supabase: клиент + авторизация ──────────────────────────
-// Данные хранятся в Supabase и защищены RLS — без входа не видны.
+// ─── Серверный API: клиент + авторизация ─────────────────────
+// Данные хранятся на нашем VPS и без авторизации не выдаются.
 const SB = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
 async function ensureAuthenticated() {
@@ -80,7 +80,7 @@ window.exportBackup = function() {
     dbToast('Бэкап скачан', true);
 };
 
-// ─── Запись в Supabase (persistence) ─────────────────────────
+// ─── Запись в серверную БД (persistence) ─────────────────────
 // Модель: optimistic UI — локальные массивы обновляются сразу (мгновенный
 // отклик), а в фоне пишем в БД. Ошибку показываем тостом, но UI не блокируем.
 function dbToast(msg, ok) {
@@ -1374,7 +1374,7 @@ window.saveOrderEdit = function(orderId) {
     o.notes = document.getElementById('editNotes').value.trim();
     o.order_number = document.getElementById('editOrderNumber').value.trim();
 
-    // Сохраняем изменения заказа и его позиции в Supabase
+    // Сохраняем изменения заказа и его позиции в серверную БД
     sbUpdateOrder(o, {
         client_id: o.client_id, created_at: o.created_at, order_number: o.order_number,
         delivery_date: o.delivery_date, notes: o.notes,
@@ -1461,7 +1461,7 @@ window.addPayment = function(orderId) {
         _pending: true,
     };
     transactions.push(tx);
-    sbInsertTransaction(tx);        // сохраняем платёж в Supabase
+    sbInsertTransaction(tx);        // сохраняем платёж в серверную БД
     // Обновляем компактный финансовый блок в карточке и активный раздел под ним.
     openOrderDetail(o.id);
     rerenderActiveSection();
@@ -1799,7 +1799,7 @@ window.deleteSupplier = function(supplierId) {
     if (!confirm(msg)) return;
     const idx = suppliers.findIndex(x => x.id === supplierId);
     if (idx !== -1) suppliers.splice(idx, 1);
-    sbDeleteSupplier(s);   // удаляем из Supabase
+    sbDeleteSupplier(s);   // удаляем из серверной БД
     renderSuppliers();
 };
 
@@ -2268,7 +2268,7 @@ window.saveNewTransaction = function() {
         _pending: true,
     };
     transactions.push(tx);
-    sbInsertTransaction(tx);        // сохраняем операцию в Supabase
+    sbInsertTransaction(tx);        // сохраняем операцию в серверную БД
     closeModal();
     rerenderActiveSection();
 };
@@ -2721,7 +2721,7 @@ function findOrCreateClient(name, phone, address, addressData) {
     const row = { id: newId, name: name.trim(), phone: phone || '', email: '', address: address || '',
                   address_data: addressData || null, created_at: new Date().toISOString().slice(0, 10) };
     clients.push(row);
-    sbInsertClient(row);            // сохраняем нового клиента в Supabase
+    sbInsertClient(row);            // сохраняем нового клиента в серверную БД
     return newId;
 }
 
@@ -2734,7 +2734,7 @@ function findOrCreateSupplier(name) {
     const newId = suppliers.length ? Math.max(...suppliers.map(x => x.id)) + 1 : 1;
     const row = { id: newId, name: name.trim(), contact_person: '', phone: '', email: '' };
     suppliers.push(row);
-    sbInsertSupplier(row);          // сохраняем нового поставщика в Supabase
+    sbInsertSupplier(row);          // сохраняем нового поставщика в серверную БД
     return newId;
 }
 
@@ -2781,7 +2781,7 @@ window.saveNewOrder = function() {
         items: items,
     };
     orders.push(newOrder);
-    sbInsertOrder(newOrder);        // сохраняем заказ в Supabase (idempotency_key защищает от дабл-клика)
+    sbInsertOrder(newOrder);        // сохраняем заказ в серверную БД (idempotency_key защищает от дабл-клика)
 
     closeModal();
     navigate('orders');
@@ -2797,10 +2797,9 @@ document.getElementById('ordersMonthsToggle').addEventListener('click', () => {
 });
 
 // ─── Подсказки адреса (DaData Suggestions) ───────────────────
-// Работает на полях .addr-suggest (адрес в заказе/клиенте). REST API из браузера
-// (CORS ок, привязки к домену нет). Токен — window.DADATA_TOKEN (бесплатный, из
-// кабинета dadata.ru). Без токена поле — обычный текст. При выборе в input._dadata
-// сохраняется структура (регион/город/улица/дом/индекс/координаты).
+// Работает на полях .addr-suggest (адрес в заказе/клиенте). Браузер обращается
+// к собственному API CRM, а токен DaData хранится только на VPS. При выборе в
+// input._dadata сохраняется структура (регион/город/улица/дом/индекс/координаты).
 let addrDadataTimer = null;
 function addrSuggestBox() {
     let box = document.getElementById('addrSuggestBox');
@@ -2812,14 +2811,12 @@ function addrSuggestBox() {
     return box;
 }
 async function fetchDadataAddress(query) {
-    const token = window.DADATA_TOKEN;
-    if (!token) return [];
     try {
-        const r = await fetch('https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address', {
+        const r = await fetch('/api/address-suggest', {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/json', 'Accept': 'application/json',
-                'Authorization': 'Token ' + token,
             },
             body: JSON.stringify({ query, count: 7 }),
         });
@@ -2835,7 +2832,7 @@ document.addEventListener('input', e => {
     const box = addrSuggestBox();
     clearTimeout(addrDadataTimer);
     const q = t.value.trim();
-    if (!window.DADATA_TOKEN || q.length < 3) { box.style.display = 'none'; return; }
+    if (q.length < 3) { box.style.display = 'none'; return; }
     addrDadataTimer = setTimeout(async () => {              // debounce 300 мс
         const items = await fetchDadataAddress(q);
         if (!items.length || document.activeElement !== t) { box.style.display = 'none'; return; }
@@ -3175,7 +3172,7 @@ async function loadData() {
             return { ...rest, items };
         });
         archiveOldOrders();
-        console.log(`Загружено из Supabase: ${orders.length} заказов, ${clients.length} клиентов, ${suppliers.length} поставщиков, ${transactions.length} транзакций`);
+        console.log(`Загружено с сервера: ${orders.length} заказов, ${clients.length} клиентов, ${suppliers.length} поставщиков, ${transactions.length} транзакций`);
         const initial = location.hash.replace('#', '') || 'delivery';
         navigate(initial);
         renderNotifications();        // счётчик уведомлений в шапке

@@ -13,6 +13,7 @@ def main():
     parser.add_argument('--url', required=True)
     parser.add_argument('--email', default='admin@crm.local')
     parser.add_argument('--password-file', required=True)
+    parser.add_argument('--check-address-suggest', action='store_true')
     args = parser.parse_args()
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(CookieJar()))
 
@@ -30,6 +31,11 @@ def main():
     session = call('/api/login', {'email': args.email, 'password': password})
     assert session['session']['user']['email'] == args.email
     print('login: ok')
+
+    if args.check_address_suggest:
+        address = call('/api/address-suggest', {'query': 'Санкт-Петербург, Невский проспект', 'count': 3})
+        assert address.get('suggestions')
+        print('address_suggest: ok')
 
     counts = {}
     first_client = None

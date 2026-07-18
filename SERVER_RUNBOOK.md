@@ -15,6 +15,7 @@ CRM is fully hosted on the VPS and does not use Supabase or GitHub at runtime.
 - SQLite database: `/var/lib/ovsyannikov-crm/crm.db`
 - Backups: `/var/backups/ovsyannikov-crm/crm-*.sqlite.gz`
 - API service: `ovsyannikov-crm.service`
+- Private service settings: `/etc/ovsyannikov-crm.env` (mode `600`)
 - Nginx config: `/etc/nginx/sites-available/ovsyannikov-crm`
 - Daily backup cron: `/etc/cron.d/ovsyannikov-crm-backup` (03:17 server time)
 
@@ -24,6 +25,16 @@ CRM is fully hosted on the VPS and does not use Supabase or GitHub at runtime.
 curl http://127.0.0.1:8765/api/health
 systemctl status ovsyannikov-crm nginx
 sqlite3 /var/lib/ovsyannikov-crm/crm.db 'pragma integrity_check;'
+```
+
+Address suggestions use the authenticated `/api/address-suggest` endpoint. The
+DaData token is stored only on the VPS:
+
+```bash
+sudo install -m 600 /dev/null /etc/ovsyannikov-crm.env
+sudoedit /etc/ovsyannikov-crm.env
+# DADATA_TOKEN=replace-with-current-token
+sudo systemctl restart ovsyannikov-crm
 ```
 
 ## Manual backup and restore verification
