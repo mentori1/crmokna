@@ -19,10 +19,10 @@ PORT = int(os.environ.get("CRM_PORT", "8765"))
 SESSION_TTL = 30 * 24 * 3600
 SECURE_COOKIE = os.environ.get("CRM_SECURE_COOKIE", "0") == "1"
 LOGIN_ATTEMPTS = {}
-TABLES = {"clients", "suppliers", "orders", "order_items", "transactions", "product_custom", "product_hidden", "audit_log"}
+TABLES = {"clients", "suppliers", "orders", "order_items", "transactions", "product_custom", "product_hidden", "app_settings", "audit_log"}
 WRITABLE = TABLES - {"audit_log"}
-JSON_COLS = {"address_data", "old_value", "new_value"}
-EVENT_COLS = {"clients", "suppliers", "orders", "transactions"}
+JSON_COLS = {"address_data", "value", "old_value", "new_value"}
+EVENT_COLS = {"clients", "suppliers", "orders", "transactions", "app_settings"}
 
 
 def db():

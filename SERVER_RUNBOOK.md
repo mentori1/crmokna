@@ -45,7 +45,8 @@ rsync -az --delete \
   -e 'ssh -i ~/.ssh/beget_ovsyannikov_crm' \
   ./ root@212.8.226.97:/opt/ovsyannikov-crm/
 ssh -i ~/.ssh/beget_ovsyannikov_crm root@212.8.226.97 \
-  'systemctl restart ovsyannikov-crm && nginx -t && systemctl reload nginx'
+  'python3 /opt/ovsyannikov-crm/deploy/migrate_app_settings.py && \
+   systemctl restart ovsyannikov-crm && nginx -t && systemctl reload nginx'
 ```
 
 ## Domain and HTTPS

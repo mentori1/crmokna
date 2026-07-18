@@ -67,6 +67,7 @@ window.exportBackup = function() {
         clients, suppliers,
         orders: orders.map(o => ({ ...o })),
         transactions,
+        app_settings: Object.values(appSettings),
     };
     const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -355,6 +356,29 @@ function calcOrder(o) {
 }
 
 let transactions = [];
+
+// Общие настройки CRM хранятся на сервере и одинаковы для обоих менеджеров.
+let appSettings = {};
+
+function appSettingValue(id, fallback) {
+    const value = appSettings[id]?.value;
+    return value && typeof value === 'object' ? value : fallback;
+}
+
+async function saveAppSetting(id, value, label) {
+    const current = appSettings[id];
+    if (current) {
+        const ok = await sbUpdate('app_settings', current, { value }, label);
+        if (!ok) return false;
+        current.value = value;
+        return true;
+    }
+    const { data, error } = await SB.from('app_settings').insert({ id, value });
+    if (error) { dbErr(label, error); return false; }
+    const saved = Array.isArray(data) ? data[0] : data;
+    appSettings[id] = saved || { id, value, version: 1 };
+    return true;
+}
 
 
 // ─── Utility ─────────────────────────────────────────────────
@@ -701,6 +725,18 @@ function renderSection(id) {
 
 // ─── Delivery ────────────────────────────────────────────────
 
+function deliveryItemLines(order, className = '') {
+    const items = order.items || [];
+    if (!items.length) return '<span class="text-muted">Состав не указан</span>';
+    const safe = value => String(value ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return items.map(item => {
+        const dimensions = item.dimensions ? ` · ${safe(item.dimensions)}` : '';
+        const quantity = Number(item.quantity) || 0;
+        return `<div class="delivery-item-line ${className}"><b>${safe(item.product_name || 'Без названия')}</b>${dimensions} · ${quantity} шт.</div>`;
+    }).join('');
+}
+
 function renderDelivery() {
     const rows = orders
         .filter(o => o.delivery_status === 'manual')
@@ -720,14 +756,61 @@ function renderDelivery() {
             <td class="font-mono ${c.clientDebt > 0 ? 'text-red' : 'text-green'}" data-label="Осталось получить">${c.clientDebt > 0 ? fmtCur(c.clientDebt) : 'Оплачено'}</td>
             <td data-label="Телефон">${client.phone || '—'}</td>
             <td data-label="Адрес">${client.address || '—'}</td>
-            <td data-label="" class="no-print"><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();removeOrderFromDelivery(${o.id})">Убрать</button></td>
+            <td class="print-only" data-label="Состав заказа">${deliveryItemLines(o, 'is-print')}</td>
+            <td data-label="" class="no-print row-actions delivery-actions">
+                <button class="btn btn-sm btn-delivery-items" onclick="event.stopPropagation();openDeliveryComposition(${o.id})">Состав</button>
+                <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();removeOrderFromDelivery(${o.id})">Убрать</button>
+            </td>
         </tr>`;
-    }).join('') : '<tr><td colspan="5" class="empty-state">Пока ни один заказ не добавлен в доставку</td></tr>';
+    }).join('') : '<tr><td colspan="6" class="empty-state">Пока ни один заказ не добавлен в доставку</td></tr>';
 
     document.querySelectorAll('#deliveryBody tr[data-order]').forEach(tr => {
         tr.addEventListener('click', () => openOrderDetail(+tr.dataset.order));
     });
 }
+
+window.openDeliveryComposition = function(orderId) {
+    const o = orders.find(x => x.id === orderId);
+    if (!o) return;
+    const c = calcOrder(o);
+    const client = clients.find(x => x.id === o.client_id) || {};
+    const label = o.order_number || crmId(o);
+    const printedAt = new Date().toLocaleString('ru-RU', { dateStyle: 'long', timeStyle: 'short' });
+
+    openModal('Состав заказа ' + label, `
+        <div class="delivery-order-sheet" id="deliveryOrderSheet" data-order="${o.id}">
+            <div class="delivery-sheet-heading">
+                <div>
+                    <h1>Лист доставки</h1>
+                    <p>${printedAt}</p>
+                </div>
+                <div class="delivery-sheet-order">Заказ <b>${label}</b></div>
+            </div>
+            <div class="delivery-sheet-info">
+                <div><span>Осталось получить</span><b class="${c.clientDebt > 0 ? 'text-red' : 'text-green'}">${c.clientDebt > 0 ? fmtCur(c.clientDebt) : 'Оплачено'}</b></div>
+                <div><span>Телефон</span><b>${client.phone || '—'}</b></div>
+                <div class="delivery-sheet-address"><span>Адрес</span><b>${client.address || '—'}</b></div>
+            </div>
+            <div class="detail-section-title">Состав заказа</div>
+            <div class="delivery-sheet-items">${deliveryItemLines(o)}</div>
+            <div class="form-actions no-print">
+                <button class="btn btn-outline" onclick="closeModal()">Закрыть</button>
+                <button class="btn btn-primary" onclick="printDeliveryOrder(${o.id})">Распечатать этот заказ</button>
+            </div>
+        </div>
+    `);
+};
+
+window.printDeliveryOrder = function(orderId) {
+    const sheet = document.getElementById('deliveryOrderSheet');
+    if (!sheet || +sheet.dataset.order !== orderId) return;
+    document.body.classList.add('print-delivery-order');
+    window.print();
+};
+
+window.addEventListener('afterprint', () => {
+    document.body.classList.remove('print-delivery-order');
+});
 
 window.moveOrderToDelivery = async function(orderId) {
     const o = orders.find(x => x.id === orderId);
@@ -808,6 +891,135 @@ function renderMonthTabs() {
     applyOrdersMonthsState();
 }
 
+const ORDER_COLUMN_DEFAULTS = [
+    { key: 'date',      label: 'Дата',       head: 'Дата' },
+    { key: 'number',    label: '№ заказа',   head: '№ заказа' },
+    { key: 'supplier',  label: 'Поставщик',  head: 'Поставщик' },
+    { key: 'purchase',  label: 'Закупка',    head: 'Закупка' },
+    { key: 'sale',      label: 'Продажа',    head: 'Продажа' },
+    { key: 'received',  label: 'Получено',   head: 'Получено' },
+    { key: 'remaining', label: 'Осталось',   head: 'Осталось' },
+    { key: 'delivery',  label: 'Доставка',   head: 'Доставка' },
+    { key: 'client',    label: 'Клиент',     head: 'Клиент' },
+    { key: 'phone',     label: 'Телефон',    head: 'Телефон' },
+    { key: 'actions',   label: 'Кнопка «Открыть»', head: '' },
+];
+const ORDER_COLUMN_MAP = Object.fromEntries(ORDER_COLUMN_DEFAULTS.map(c => [c.key, c]));
+
+function getOrderColumnsConfig() {
+    const fallback = { order: ORDER_COLUMN_DEFAULTS.map(c => c.key), hidden: [] };
+    const saved = appSettingValue('orders_columns', fallback);
+    const order = [];
+    (Array.isArray(saved.order) ? saved.order : []).forEach(key => {
+        if (ORDER_COLUMN_MAP[key] && !order.includes(key)) order.push(key);
+    });
+    ORDER_COLUMN_DEFAULTS.forEach(col => { if (!order.includes(col.key)) order.push(col.key); });
+    const hidden = (Array.isArray(saved.hidden) ? saved.hidden : []).filter(key => ORDER_COLUMN_MAP[key]);
+    return { order, hidden };
+}
+
+function orderColumnCell(key, o, c, supplierNames) {
+    switch (key) {
+        case 'date':
+            return `<td class="col-date" data-label="Дата">${fmtDate(o.created_at)}</td>`;
+        case 'number':
+            return `<td class="col-number td-bold" data-label="№ заказа">${o.order_number
+                ? o.order_number
+                : `<span class="text-muted" style="font-weight:500" title="Номер от производства ещё не присвоен — показан наш CRM-ID">${crmId(o)}</span>`}</td>`;
+        case 'supplier':
+            return `<td class="col-supplier" data-label="Поставщик">${supplierNames}</td>`;
+        case 'purchase':
+            return `<td class="col-purchase font-mono text-right" data-label="Закупка">${fmtCur(c.totalPurchase)}</td>`;
+        case 'sale':
+            return `<td class="col-sale font-mono text-right" data-label="Продажа">${fmtCur(c.totalSale)}</td>`;
+        case 'received':
+            return `<td class="col-received font-mono text-right" data-label="Получено">${fmtCur(c.paidByClient)}</td>`;
+        case 'remaining':
+            return `<td class="col-remaining font-mono text-right ${c.clientDebt > 0 ? 'text-red' : ''}" data-label="Осталось">${c.clientDebt > 0 ? fmtCur(c.clientDebt) : '—'}</td>`;
+        case 'delivery':
+            return `<td class="col-delivery" data-label="Доставка">
+                <button class="btn btn-sm ${o.delivery_status === 'manual' ? 'btn-delivery-added' : 'btn-delivery'}"
+                    ${o.delivery_status === 'manual' ? 'disabled' : ''}
+                    onclick="event.stopPropagation();moveOrderToDelivery(${o.id})">
+                    ${o.delivery_status === 'manual' ? 'В доставке' : 'В доставку'}
+                </button>
+            </td>`;
+        case 'client':
+            return `<td class="col-client" data-label="Клиент">${clientName(o.client_id)}</td>`;
+        case 'phone':
+            return `<td class="col-phone" data-label="Телефон">${clientPhone(o.client_id) || '—'}</td>`;
+        case 'actions':
+            return `<td class="col-actions" data-label=""><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openOrderDetail(${o.id})">Открыть</button></td>`;
+        default:
+            return '';
+    }
+}
+
+let orderColumnsDraft = null;
+
+function renderOrderColumnsEditor() {
+    const box = document.getElementById('orderColumnsList');
+    if (!box || !orderColumnsDraft) return;
+    box.innerHTML = orderColumnsDraft.order.map((key, index) => {
+        const col = ORDER_COLUMN_MAP[key];
+        const visible = !orderColumnsDraft.hidden.includes(key);
+        return `<div class="order-column-row">
+            <label><input type="checkbox" ${visible ? 'checked' : ''} onchange="toggleOrderColumn('${key}',this.checked)"> <span>${col.label}</span></label>
+            <div class="order-column-arrows">
+                <button class="btn btn-sm btn-outline" ${index === 0 ? 'disabled' : ''} onclick="moveOrderColumn('${key}',-1)" title="Переместить выше">↑</button>
+                <button class="btn btn-sm btn-outline" ${index === orderColumnsDraft.order.length - 1 ? 'disabled' : ''} onclick="moveOrderColumn('${key}',1)" title="Переместить ниже">↓</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+window.openOrderColumnsSettings = function() {
+    const current = getOrderColumnsConfig();
+    orderColumnsDraft = { order: [...current.order], hidden: [...current.hidden] };
+    openModal('Столбцы заказов', `
+        <p class="text-muted" style="margin:0 0 14px">Галочка показывает столбец, стрелки меняют его место. Настройка общая для всех пользователей CRM.</p>
+        <div class="order-columns-list" id="orderColumnsList"></div>
+        <div class="form-actions">
+            <button class="btn btn-outline" onclick="resetOrderColumnsDraft()">Сбросить</button>
+            <button class="btn btn-primary" onclick="saveOrderColumnsSettings()">Сохранить</button>
+        </div>
+    `);
+    renderOrderColumnsEditor();
+};
+
+window.toggleOrderColumn = function(key, visible) {
+    if (!orderColumnsDraft || !ORDER_COLUMN_MAP[key]) return;
+    orderColumnsDraft.hidden = orderColumnsDraft.hidden.filter(x => x !== key);
+    if (!visible) orderColumnsDraft.hidden.push(key);
+};
+
+window.moveOrderColumn = function(key, direction) {
+    if (!orderColumnsDraft) return;
+    const from = orderColumnsDraft.order.indexOf(key);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= orderColumnsDraft.order.length) return;
+    [orderColumnsDraft.order[from], orderColumnsDraft.order[to]] = [orderColumnsDraft.order[to], orderColumnsDraft.order[from]];
+    renderOrderColumnsEditor();
+};
+
+window.resetOrderColumnsDraft = function() {
+    orderColumnsDraft = { order: ORDER_COLUMN_DEFAULTS.map(c => c.key), hidden: [] };
+    renderOrderColumnsEditor();
+};
+
+window.saveOrderColumnsSettings = async function() {
+    if (!orderColumnsDraft) return;
+    if (orderColumnsDraft.hidden.length === orderColumnsDraft.order.length) {
+        dbToast('Оставьте хотя бы один столбец', false);
+        return;
+    }
+    const value = { order: [...orderColumnsDraft.order], hidden: [...orderColumnsDraft.hidden] };
+    if (!await saveAppSetting('orders_columns', value, 'настройка столбцов')) return;
+    closeModal();
+    renderOrders();
+    dbToast('Столбцы сохранены', true);
+};
+
 function renderOrders() {
     renderMonthTabs();
     const status = document.getElementById('filterStatus').value;
@@ -828,31 +1040,18 @@ function renderOrders() {
     const start = (window.ordersPage - 1) * ORDERS_PER_PAGE;
     const pageRows = filtered.slice(start, start + ORDERS_PER_PAGE);
 
+    const columnConfig = getOrderColumnsConfig();
+    const visibleColumns = columnConfig.order.filter(key => !columnConfig.hidden.includes(key));
+    document.getElementById('ordersHead').innerHTML = visibleColumns.map(key => {
+        const col = ORDER_COLUMN_MAP[key];
+        return `<th class="col-${key}">${col.head}</th>`;
+    }).join('');
+
     document.getElementById('ordersBody').innerHTML = pageRows.length ? pageRows.map(o => {
         const c = calcOrder(o);
         const supplierNames = [...new Set(o.items.map(i => i.supplier_id).filter(Boolean))].map(supplierName).join(', ') || '—';
-        return `<tr data-order="${o.id}">
-            <td data-label="Дата">${fmtDate(o.created_at)}</td>
-            <td class="td-bold" data-label="№ заказа">${o.order_number
-                ? o.order_number
-                : `<span class="text-muted" style="font-weight:500" title="Номер от производства ещё не присвоен — показан наш CRM-ID">${crmId(o)}</span>`}</td>
-            <td data-label="Поставщик">${supplierNames}</td>
-            <td class="font-mono text-right" data-label="Закупка">${fmtCur(c.totalPurchase)}</td>
-            <td class="font-mono text-right" data-label="Продажа">${fmtCur(c.totalSale)}</td>
-            <td class="font-mono text-right" data-label="Получено">${fmtCur(c.paidByClient)}</td>
-            <td class="font-mono text-right ${c.clientDebt > 0 ? 'text-red' : ''}" data-label="Осталось">${c.clientDebt > 0 ? fmtCur(c.clientDebt) : '—'}</td>
-            <td data-label="Доставка">
-                <button class="btn btn-sm ${o.delivery_status === 'manual' ? 'btn-delivery-added' : 'btn-delivery'}"
-                    ${o.delivery_status === 'manual' ? 'disabled' : ''}
-                    onclick="event.stopPropagation();moveOrderToDelivery(${o.id})">
-                    ${o.delivery_status === 'manual' ? 'В доставке' : 'В доставку'}
-                </button>
-            </td>
-            <td data-label="Клиент">${clientName(o.client_id)}</td>
-            <td data-label="Телефон">${clientPhone(o.client_id) || '—'}</td>
-            <td data-label=""><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openOrderDetail(${o.id})">Открыть</button></td>
-        </tr>`;
-    }).join('') : '<tr><td colspan="11" class="empty-state">Нет заказов</td></tr>';
+        return `<tr data-order="${o.id}">${visibleColumns.map(key => orderColumnCell(key, o, c, supplierNames)).join('')}</tr>`;
+    }).join('') : `<tr><td colspan="${visibleColumns.length}" class="empty-state">Нет заказов</td></tr>`;
 
     // Пагинация
     let pagBox = document.getElementById('ordersPagination');
@@ -891,6 +1090,7 @@ document.getElementById('filterStatus').addEventListener('change', renderOrders)
 document.getElementById('filterDateFrom').addEventListener('change', renderOrders);
 document.getElementById('filterDateTo').addEventListener('change', renderOrders);
 document.getElementById('btnPrintDelivery').addEventListener('click', printDeliverySheet);
+document.getElementById('ordersColumnsButton').addEventListener('click', openOrderColumnsSettings);
 
 
 // ─── Order Detail Modal ──────────────────────────────────────
@@ -1679,52 +1879,84 @@ window.saveSupplier = function(supplierId) {
 
 // ─── Finances ────────────────────────────────────────────────
 
-function renderFinances() {
-    const savedTransactions = transactions.filter(t => !t._pending);
-    const totalIncome = savedTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-    const totalExpense = savedTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+function getOlaSalaryConfig() {
+    const saved = appSettingValue('ola_salary_rates', { default_rate: 9, months: {} });
+    const defaultRate = Number.isFinite(+saved.default_rate) ? +saved.default_rate : 9;
+    return {
+        default_rate: defaultRate,
+        months: saved.months && typeof saved.months === 'object' ? { ...saved.months } : {},
+    };
+}
 
-    let totalClientDebt = 0, totalSupplierDebt = 0, totalRevenue = 0, totalProfit = 0;
-    orders.forEach(o => {
-        const c = calcOrder(o);
-        totalRevenue += c.totalSale;
-        totalProfit += c.margin;
-        totalClientDebt += Math.max(0, c.clientDebt);
-        totalSupplierDebt += Math.max(0, c.supplierDebt);
-    });
+function olaSalaryRateForMonth(month) {
+    const config = getOlaSalaryConfig();
+    const value = config.months[month];
+    return Number.isFinite(+value) ? +value : config.default_rate;
+}
 
-    document.getElementById('financeMetrics').innerHTML = `
-        <div class="metric-card green">
-            <div class="metric-label">Продажи по заказам</div>
-            <div class="metric-value">${fmtCur(totalRevenue)}</div>
-            <div class="metric-sub">начислено, не равно оплатам</div>
+function olaSalaryTurnover(month) {
+    return orders
+        .filter(o => (o.created_at || '').slice(0, 7) === month)
+        .reduce((sum, order) => sum + calcOrder(order).totalSale, 0);
+}
+
+function renderOlaSalary() {
+    const panel = document.getElementById('olaSalaryPanel');
+    if (!panel) return;
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const months = [...new Set([currentMonth, ...orders.map(o => (o.created_at || '').slice(0, 7)).filter(Boolean)])].sort().reverse();
+    if (!window.olaSalaryMonth || !months.includes(window.olaSalaryMonth)) window.olaSalaryMonth = currentMonth;
+    const month = window.olaSalaryMonth;
+    const rate = olaSalaryRateForMonth(month);
+    const turnover = olaSalaryTurnover(month);
+    const salary = turnover * rate / 100;
+    const monthOptions = months.map(value => {
+        const [year, number] = value.split('-').map(Number);
+        const label = new Date(year, number - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+        return `<option value="${value}" ${value === month ? 'selected' : ''}>${label}</option>`;
+    }).join('');
+
+    panel.innerHTML = `
+        <div class="ola-salary-head">
+            <div><h2>ЗП Оли</h2><p>Считается от суммы продаж в созданных заказах за месяц</p></div>
+            <select id="olaSalaryMonth" onchange="window.olaSalaryMonth=this.value;renderFinances()">${monthOptions}</select>
         </div>
-        <div class="metric-card cyan">
-            <div class="metric-label">Маржа по заказам</div>
-            <div class="metric-value">${fmtCur(totalProfit)}</div>
-            <div class="metric-sub">продажа минус закупка</div>
-        </div>
-        <div class="metric-card green">
-            <div class="metric-label">Получено от клиентов</div>
-            <div class="metric-value">${fmtCur(totalIncome)}</div>
-            <div class="metric-sub">фактические платежи</div>
-        </div>
-        <div class="metric-card red">
-            <div class="metric-label">Оплачено поставщикам</div>
-            <div class="metric-value">${fmtCur(totalExpense)}</div>
-            <div class="metric-sub">фактические платежи</div>
-        </div>
-        <div class="metric-card amber">
-            <div class="metric-label">Дебиторская задолж.</div>
-            <div class="metric-value">${fmtCur(totalClientDebt)}</div>
-            <div class="metric-sub">должны нам клиенты</div>
-        </div>
-        <div class="metric-card red">
-            <div class="metric-label">Кредиторская задолж.</div>
-            <div class="metric-value">${fmtCur(totalSupplierDebt)}</div>
-            <div class="metric-sub">мы должны поставщикам</div>
+        <div class="ola-salary-values">
+            <div><span>Оборот по продажам</span><b>${fmtCur(turnover)}</b></div>
+            <div class="ola-rate-field"><label for="olaSalaryRate">Ставка</label><span><input id="olaSalaryRate" type="number" min="0" max="100" step="0.1" value="${rate}" oninput="previewOlaSalary()"> %</span></div>
+            <div class="ola-salary-total"><span>Зарплата за месяц</span><b id="olaSalaryTotal" data-turnover="${turnover}">${fmtCur(salary)}</b></div>
+            <button class="btn btn-primary" onclick="saveOlaSalaryRate()">Сохранить ставку</button>
         </div>
     `;
+}
+
+window.previewOlaSalary = function() {
+    const input = document.getElementById('olaSalaryRate');
+    const total = document.getElementById('olaSalaryTotal');
+    if (!input || !total) return;
+    const rate = Number(String(input.value).replace(',', '.'));
+    const turnover = +total.dataset.turnover || 0;
+    total.textContent = fmtCur(turnover * (Number.isFinite(rate) ? rate : 0) / 100);
+};
+
+window.saveOlaSalaryRate = async function() {
+    const input = document.getElementById('olaSalaryRate');
+    const rate = Number(String(input?.value || '').replace(',', '.'));
+    if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
+        dbToast('Ставка должна быть от 0 до 100%', false);
+        return;
+    }
+    const config = getOlaSalaryConfig();
+    config.months[window.olaSalaryMonth] = rate;
+    if (!await saveAppSetting('ola_salary_rates', config, 'ставка ЗП Оли')) return;
+    renderOlaSalary();
+    dbToast('Ставка ЗП сохранена', true);
+};
+
+function renderFinances() {
+    renderOlaSalary();
+    const savedTransactions = transactions.filter(t => !t._pending);
 
     // Выбор: Все / Доходы / Расходы  +  разбивка по месяцам
     const type = window.finType || '';           // '', income, expense
@@ -2699,6 +2931,7 @@ function openModal(title, bodyHTML) {
 function closeModal() {
     document.getElementById('modalOverlay').classList.remove('open');
     document.body.classList.remove('modal-open');
+    document.body.classList.remove('print-delivery-order');
 }
 
 document.getElementById('modalClose').addEventListener('click', closeModal);
@@ -2761,15 +2994,17 @@ async function fetchAll(table, select = '*') {
 async function loadData() {
     await ensureAuthenticated();
     try {
-        const [c, s, ordRaw, t] = await Promise.all([
+        const [c, s, ordRaw, t, settings] = await Promise.all([
             fetchAll('clients'),
             fetchAll('suppliers'),
             fetchAll('orders', '*, order_items(*)'),
             fetchAll('transactions'),
+            fetchAll('app_settings').catch(() => []),
         ]);
         clients = c;
         suppliers = s;
         transactions = t.map(x => ({ ...x, amount: +x.amount }));
+        appSettings = Object.fromEntries(settings.map(row => [row.id, row]));
         // Скрытые/добавленные вручную названия продукции
         try {
             const [{ data: hp }, { data: cp }] = await Promise.all([
@@ -2817,13 +3052,15 @@ function subscribeRealtime() {
             if (refreshing || document.hidden) return;
             refreshing = true;
             try {
-                const [c, s, ordRaw, t] = await Promise.all([
+                const [c, s, ordRaw, t, settings] = await Promise.all([
                     fetchAll('clients'), fetchAll('suppliers'),
                     fetchAll('orders', '*, order_items(*)'), fetchAll('transactions'),
+                    fetchAll('app_settings').catch(() => []),
                 ]);
                 clients = c;
                 suppliers = s;
                 transactions = t.map(x => ({ ...x, amount: +x.amount }));
+                appSettings = Object.fromEntries(settings.map(row => [row.id, row]));
                 orders = ordRaw.map(o => {
                     const items = (o.order_items || []).map(i => ({
                         product_name: i.product_name, dimensions: i.dimensions || '',

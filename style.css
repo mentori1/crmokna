@@ -657,29 +657,55 @@ body.modal-open { overflow: hidden; }
 /* Заказы: пропорциональная раскладка использует всю ширину без пустого провала */
 #ordersTable { table-layout: fixed; width: 100%; min-width: 1000px; }
 #ordersTable th, #ordersTable td { padding-left: 9px; padding-right: 9px; }
-#ordersTable th:nth-child(1),  #ordersTable td:nth-child(1)  { width: 7%; white-space: nowrap; }
-#ordersTable th:nth-child(2),  #ordersTable td:nth-child(2)  { width: 8%; word-break: break-word; }
-#ordersTable th:nth-child(3),  #ordersTable td:nth-child(3)  { width: 9%; word-break: break-word; }
-#ordersTable th:nth-child(4),  #ordersTable td:nth-child(4)  { width: 7%; }
-#ordersTable th:nth-child(5),  #ordersTable td:nth-child(5)  { width: 7%; }
-#ordersTable th:nth-child(6),  #ordersTable td:nth-child(6)  { width: 8%; }
-#ordersTable th:nth-child(7),  #ordersTable td:nth-child(7)  { width: 7%; }
-#ordersTable th:nth-child(8),  #ordersTable td:nth-child(8)  { width: 10%; }
-#ordersTable th:nth-child(9),  #ordersTable td:nth-child(9)  { width: 16%; word-break: break-word; }
-#ordersTable th:nth-child(10), #ordersTable td:nth-child(10) { width: 12%; white-space: nowrap; }
-#ordersTable th:nth-child(11), #ordersTable td:nth-child(11) { width: 9%; white-space: nowrap; padding-right: 12px; }
-#ordersTable th:nth-child(9), #ordersTable td:nth-child(9),
-#ordersTable th:nth-child(10), #ordersTable td:nth-child(10) {
+#ordersTable .col-date      { width: 7%; white-space: nowrap; }
+#ordersTable .col-number    { width: 8%; word-break: break-word; }
+#ordersTable .col-supplier  { width: 9%; word-break: break-word; }
+#ordersTable .col-purchase  { width: 7%; }
+#ordersTable .col-sale      { width: 7%; }
+#ordersTable .col-received  { width: 8%; }
+#ordersTable .col-remaining { width: 7%; }
+#ordersTable .col-delivery  { width: 10%; }
+#ordersTable .col-client    { width: 16%; word-break: break-word; }
+#ordersTable .col-phone     { width: 12%; white-space: nowrap; }
+#ordersTable .col-actions   { width: 9%; white-space: nowrap; padding-right: 12px; }
+#ordersTable .col-client,
+#ordersTable .col-phone {
     border-left: 1px solid var(--slate-200);
 }
-/* Доставка: контакты, остаток и служебная кнопка удаления */
+.orders-toolbar {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 10px; margin-bottom: 10px;
+}
+.orders-toolbar .months-toggle { margin-bottom: 0; }
+.order-columns-list { border: 1px solid var(--slate-200); border-radius: 8px; overflow: hidden; }
+.order-column-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 9px 12px; background: #fff;
+}
+.order-column-row + .order-column-row { border-top: 1px solid var(--slate-100); }
+.order-column-row label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.order-column-row input { width: 16px; height: 16px; }
+.order-column-arrows { display: flex; gap: 5px; }
+.order-column-arrows .btn { width: 34px; justify-content: center; padding: 5px; }
+/* Доставка: контакты, остаток, состав и служебные действия */
 #deliveryTable { table-layout: fixed; width: 100%; min-width: 680px; }
 #deliveryTable th:nth-child(1), #deliveryTable td:nth-child(1) { width: 14%; }
 #deliveryTable th:nth-child(2), #deliveryTable td:nth-child(2) { width: 18%; }
-#deliveryTable th:nth-child(3), #deliveryTable td:nth-child(3) { width: 20%; white-space: nowrap; }
-#deliveryTable th:nth-child(4), #deliveryTable td:nth-child(4) { width: 40%; white-space: normal; word-break: break-word; }
-#deliveryTable th:nth-child(5), #deliveryTable td:nth-child(5) { width: 8%; }
+#deliveryTable th:nth-child(3), #deliveryTable td:nth-child(3) { width: 18%; white-space: nowrap; }
+#deliveryTable th:nth-child(4), #deliveryTable td:nth-child(4) { width: 38%; white-space: normal; word-break: break-word; }
+#deliveryTable th:nth-child(6), #deliveryTable td:nth-child(6) { width: 12%; }
+.print-only { display: none !important; }
 .delivery-print-meta { display: none; }
+.delivery-actions { justify-content: flex-end; }
+.btn-delivery-items {
+    color: var(--blue-700); background: var(--blue-100);
+    border: 1px solid #bfdbfe;
+}
+.btn-delivery-items:hover { background: #bfdbfe; }
+.delivery-item-line { padding: 10px 12px; line-height: 1.45; }
+.delivery-item-line + .delivery-item-line { border-top: 1px solid var(--slate-200); }
+.delivery-item-line.is-print { padding: 0; font-size: 11px; }
+.delivery-item-line.is-print + .delivery-item-line { margin-top: 5px; padding-top: 5px; }
 
 .badge-income  { background: var(--green-100); color: var(--green-700); }
 .badge-expense { background: var(--red-100);   color: var(--red-600); }
@@ -832,6 +858,74 @@ body.modal-open { overflow: hidden; }
     padding-bottom: 6px; border-bottom: 1px solid var(--slate-100);
 }
 
+/* Отдельный лист состава одного заказа для логиста */
+.delivery-order-sheet { color: var(--slate-800); }
+.delivery-sheet-heading {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 20px; padding-bottom: 18px; border-bottom: 2px solid var(--slate-800);
+}
+.delivery-sheet-heading h1 { margin: 0 0 4px; font-size: 24px; }
+.delivery-sheet-heading p { margin: 0; font-size: 12px; color: var(--slate-500); }
+.delivery-sheet-order {
+    flex: 0 0 auto; padding: 9px 12px; border: 1px solid var(--slate-300);
+    border-radius: 8px; font-size: 15px;
+}
+.delivery-sheet-info {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-top: 16px;
+}
+.delivery-sheet-info > div {
+    min-width: 0; padding: 12px; background: var(--slate-50);
+    border: 1px solid var(--slate-200); border-radius: 8px;
+}
+.delivery-sheet-info span,
+.delivery-sheet-info b { display: block; }
+.delivery-sheet-info span {
+    margin-bottom: 4px; color: var(--slate-500); font-size: 11px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: .3px;
+}
+.delivery-sheet-info b { font-size: 15px; overflow-wrap: anywhere; }
+.delivery-sheet-address { grid-column: 1 / -1; }
+.delivery-sheet-items {
+    border: 1px solid var(--slate-200); border-radius: 8px; overflow: hidden;
+}
+
+/* Финансы: единственный расчётный блок — помесячная зарплата Оли */
+.ola-salary-panel {
+    margin-bottom: 24px; padding: 18px 20px; background: #fff;
+    border: 1px solid var(--slate-200); border-left: 4px solid var(--purple-500);
+    border-radius: 10px; box-shadow: var(--shadow);
+}
+.ola-salary-head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 16px; margin-bottom: 14px;
+}
+.ola-salary-head h2 { margin: 0 0 3px; font-size: 18px; }
+.ola-salary-head p { margin: 0; color: var(--slate-500); font-size: 12px; }
+.ola-salary-head select {
+    min-width: 180px; padding: 8px 10px; border: 1px solid var(--slate-300);
+    border-radius: 6px; background: #fff; font: inherit;
+}
+.ola-salary-values {
+    display: grid; grid-template-columns: minmax(170px, 1fr) 150px minmax(170px, 1fr) auto;
+    align-items: end; gap: 10px;
+}
+.ola-salary-values > div {
+    min-height: 62px; padding: 10px 12px; border-radius: 8px;
+    background: var(--slate-50); border: 1px solid var(--slate-200);
+}
+.ola-salary-values span,
+.ola-salary-values label { display: block; margin-bottom: 3px; color: var(--slate-500); font-size: 11px; }
+.ola-salary-values b { display: block; font-size: 20px; }
+.ola-rate-field > span { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--slate-700); font-size: 14px; }
+.ola-rate-field input {
+    width: 82px; padding: 7px 8px; border: 1px solid var(--slate-300);
+    border-radius: 6px; font: inherit;
+}
+.ola-salary-total { border-color: var(--green-100) !important; background: var(--green-50) !important; }
+.ola-salary-total b { color: var(--green-700); }
+.ola-salary-values > .btn { height: 42px; }
+
 .items-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
 .items-table th {
     text-align: left; padding: 6px 10px;
@@ -898,6 +992,7 @@ body.modal-open { overflow: hidden; }
     .form-grid { grid-template-columns: 1fr; }
     .detail-grid { grid-template-columns: 1fr; }
     .metrics-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .ola-salary-values { grid-template-columns: 1fr 1fr; }
 
     /* Затемнение под открытым меню */
     .sidebar-backdrop {
@@ -916,8 +1011,8 @@ body.modal-open { overflow: hidden; }
     html { font-size: 15px; }
 
     #ordersTable { min-width: 0; }
-    #ordersTable th:nth-child(9), #ordersTable td:nth-child(9),
-    #ordersTable th:nth-child(10), #ordersTable td:nth-child(10) { border-left: none; }
+    #ordersTable .col-client,
+    #ordersTable .col-phone { border-left: none; }
 
     .content { padding: 12px; }
     .section-title { font-size: 18px; margin-bottom: 14px; }
@@ -949,6 +1044,8 @@ body.modal-open { overflow: hidden; }
     .filter-group { width: 100%; }
     .filter-group select,
     .filter-group input { flex: 1; }
+    .orders-toolbar { flex-direction: column; align-items: stretch; }
+    .orders-toolbar .btn { width: 100%; justify-content: center; }
 
     /* ── Таблицы → карточки (без горизонтального скролла) ── */
     .table-wrapper { overflow: visible; background: transparent; box-shadow: none; }
@@ -1101,6 +1198,14 @@ body.modal-open { overflow: hidden; }
 
     .compact-finance-grid { grid-template-columns: 1fr 1fr; }
     .compact-payment-form { grid-template-columns: 1fr; }
+    .ola-salary-panel { padding: 14px; }
+    .ola-salary-head { flex-direction: column; }
+    .ola-salary-head select { width: 100%; min-width: 0; }
+    .ola-salary-values { grid-template-columns: 1fr; }
+    .ola-salary-values > .btn { width: 100%; }
+    .delivery-sheet-heading { flex-direction: column; gap: 12px; }
+    .delivery-sheet-info { grid-template-columns: 1fr; }
+    .delivery-sheet-address { grid-column: auto; }
 }
 
 @media print {
@@ -1114,14 +1219,33 @@ body.modal-open { overflow: hidden; }
     #section-delivery .section-title { font-size: 22px; margin: 0; }
     .delivery-section-header { margin-bottom: 4px; }
     .delivery-print-meta { display: block; margin-bottom: 14px; font-size: 12px; color: #475569; }
+    .print-only { display: table-cell !important; }
     #deliveryTable { min-width: 0; box-shadow: none; border: 1px solid #94a3b8; }
-    #deliveryTable th, #deliveryTable td { padding: 9px 8px; color: #000; border: 1px solid #cbd5e1; }
-    #deliveryTable th:nth-child(1), #deliveryTable td:nth-child(1) { width: 16%; }
-    #deliveryTable th:nth-child(2), #deliveryTable td:nth-child(2) { width: 20%; }
-    #deliveryTable th:nth-child(3), #deliveryTable td:nth-child(3) { width: 22%; }
-    #deliveryTable th:nth-child(4), #deliveryTable td:nth-child(4) { width: 42%; }
+    #deliveryTable th, #deliveryTable td { padding: 8px 7px; color: #000; border: 1px solid #cbd5e1; }
+    #deliveryTable th:nth-child(1), #deliveryTable td:nth-child(1) { width: 12%; }
+    #deliveryTable th:nth-child(2), #deliveryTable td:nth-child(2) { width: 15%; }
+    #deliveryTable th:nth-child(3), #deliveryTable td:nth-child(3) { width: 18%; }
+    #deliveryTable th:nth-child(4), #deliveryTable td:nth-child(4) { width: 25%; }
+    #deliveryTable th:nth-child(5), #deliveryTable td:nth-child(5) { width: 30%; }
     #deliveryTable tbody tr { break-inside: avoid; }
     #deliveryTable tbody tr:hover td { background: #fff; }
+
+    body.print-delivery-order .main { display: none !important; }
+    body.print-delivery-order .modal-overlay {
+        position: static; inset: auto; display: block !important;
+        padding: 0; overflow: visible; background: #fff;
+    }
+    body.print-delivery-order .modal {
+        display: block; width: 100%; max-width: none; max-height: none;
+        border-radius: 0; box-shadow: none; animation: none;
+    }
+    body.print-delivery-order .modal-header { display: none !important; }
+    body.print-delivery-order .modal-body { padding: 0; overflow: visible; }
+    body.print-delivery-order .delivery-sheet-info > div {
+        background: #fff; border-color: #94a3b8;
+    }
+    body.print-delivery-order .delivery-sheet-items { border-color: #94a3b8; }
+    body.print-delivery-order .delivery-item-line { padding: 12px; }
 }
 
 /* ─── Форма «Добавить платёж» в карточке заказа ───────── */

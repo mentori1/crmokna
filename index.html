@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Центр окон и дверей — CRM</title>
-    <link rel="stylesheet" href="style.css?v=57">
+    <link rel="stylesheet" href="style.css?v=58">
 </head>
 <body>
 
@@ -161,6 +161,7 @@
                             <th>Осталось получить</th>
                             <th>Телефон</th>
                             <th>Адрес</th>
+                            <th class="print-only">Состав заказа</th>
                             <th class="no-print"></th>
                         </tr>
                     </thead>
@@ -198,14 +199,17 @@
                     <input type="date" id="filterDateTo">
                 </div>
             </div>
-            <button class="btn btn-outline btn-sm months-toggle" id="ordersMonthsToggle">📅 Месяцы</button>
+            <div class="orders-toolbar">
+                <button class="btn btn-outline btn-sm months-toggle" id="ordersMonthsToggle">📅 Месяцы</button>
+                <button class="btn btn-outline btn-sm" id="ordersColumnsButton">Настроить столбцы</button>
+            </div>
             <div class="products-layout" id="ordersLayout">
                 <aside class="product-cats orders-months" id="orderMonths"></aside>
                 <div class="product-main">
                     <div class="table-wrapper">
                         <table class="data-table" id="ordersTable">
                             <thead>
-                                <tr>
+                                <tr id="ordersHead">
                                     <th>Дата</th>
                                     <th>№ заказа</th>
                                     <th>Поставщик</th>
@@ -276,8 +280,8 @@
         <!-- ─── Finances ─── -->
         <section class="section" id="section-finances">
             <h1 class="section-title">Финансы</h1>
-            <div class="metrics-grid" id="financeMetrics"></div>
-            <div class="section-header" style="margin-top:24px">
+            <div class="ola-salary-panel" id="olaSalaryPanel"></div>
+            <div class="section-header" style="margin-top:0">
                 <h2>Движение денежных средств</h2>
                 <button class="btn btn-primary" id="btnNewTransaction">+ Операция</button>
             </div>
@@ -390,6 +394,6 @@
 </div>
 
 <script src="supabase-local.js?v=54"></script>
-<script src="app.js?v=57"></script>
+<script src="app.js?v=58"></script>
 </body>
 </html>

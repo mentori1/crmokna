@@ -20,6 +20,7 @@ create table order_items(id integer primary key autoincrement,order_id integer r
 create table transactions(id integer primary key,date text,type text,entity_type text,entity_id integer,order_id integer not null references orders(id) on delete cascade,amount real default 0,description text default '',idempotency_key text unique,version integer not null default 1,updated_at text,deleted_at text,created_by text,updated_by text);
 create table product_custom(name text primary key,category text);
 create table product_hidden(name text primary key);
+create table app_settings(id text primary key,value text not null,version integer not null default 1,updated_at text,deleted_at text,created_by text,updated_by text);
 create table audit_log(id integer primary key autoincrement,table_name text,row_id text,action text,old_value text,new_value text,actor text,at text);
 create table users(id text primary key,email text unique,password_hash text not null);
 create table sessions(token text primary key,user_id text references users(id),expires_at integer not null);
@@ -63,7 +64,7 @@ def insert_rows(conn, table, rows):
     columns = {r[1] for r in conn.execute(f'pragma table_info({table})')}
     for row in rows:
         clean = {k: v for k, v in row.items() if k in columns}
-        for key in ('address_data', 'old_value', 'new_value'):
+        for key in ('address_data', 'value', 'old_value', 'new_value'):
             if key in clean and clean[key] is not None and not isinstance(clean[key], str):
                 clean[key] = json.dumps(clean[key], ensure_ascii=False)
         cols = list(clean)
@@ -83,8 +84,15 @@ def main():
         output.unlink()
     conn = sqlite3.connect(output)
     conn.executescript(SCHEMA)
-    for table in ('clients','suppliers','orders','order_items','transactions','product_custom','product_hidden','audit_log'):
+    for table in ('clients','suppliers','orders','order_items','transactions','product_custom','product_hidden','app_settings','audit_log'):
         insert_rows(conn, table, load(backup / f'{table}.json'))
+    conn.execute("insert or ignore into app_settings(id,value) values(?,?)", (
+        'ola_salary_rates', json.dumps({'default_rate': 9, 'months': {}}, ensure_ascii=False)))
+    conn.execute("insert or ignore into app_settings(id,value) values(?,?)", (
+        'orders_columns', json.dumps({
+            'order': ['date','number','supplier','purchase','sale','received','remaining','delivery','client','phone','actions'],
+            'hidden': [],
+        }, ensure_ascii=False)))
     conn.execute("""update transactions set deleted_at=(select o.deleted_at from orders o where o.id=transactions.order_id)
                     where deleted_at is null and exists(select 1 from orders o where o.id=transactions.order_id and o.deleted_at is not null)""")
     conn.execute("""update order_items set deleted_at=(select o.deleted_at from orders o where o.id=order_items.order_id)
@@ -93,7 +101,7 @@ def main():
     password = Path(args.password_file).read_text().strip()
     conn.execute('insert into users(id,email,password_hash) values(?,?,?)', (secrets.token_hex(16), args.email.lower(), encode_password(password)))
     conn.commit()
-    for table in ('clients','suppliers','orders','order_items','transactions','product_custom','product_hidden','audit_log'):
+    for table in ('clients','suppliers','orders','order_items','transactions','product_custom','product_hidden','app_settings','audit_log'):
         print(f'{table}: {conn.execute(f"select count(*) from {table}").fetchone()[0]}')
     print('integrity:', conn.execute('pragma integrity_check').fetchone()[0])
     conn.close()
