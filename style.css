@@ -864,8 +864,8 @@ body.modal-open { overflow: hidden; }
 .order-detail-open .modal-header { padding: 12px 18px; }
 .order-detail-open .modal-body { padding: 14px 18px; }
 .order-summary-grid {
-    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 7px; margin-bottom: 10px;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px; margin-bottom: 12px;
 }
 .order-summary-grid > div {
     min-width: 0; padding: 7px 9px; border: 1px solid var(--slate-200);
@@ -878,17 +878,19 @@ body.modal-open { overflow: hidden; }
     font-weight: 600; text-transform: uppercase; letter-spacing: .25px;
 }
 .order-summary-grid b { font-size: 12px; overflow-wrap: anywhere; }
-.order-summary-suppliers { grid-column: span 2; }
+.order-summary-suppliers { grid-column: auto; }
 .order-detail-columns {
-    display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(360px, .9fr);
-    gap: 14px; align-items: start;
+    display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(420px, 1fr);
+    gap: 16px; align-items: start;
 }
 .order-detail-main,
 .order-detail-finance {
     min-width: 0; padding: 10px; border: 1px solid var(--slate-200);
     border-radius: 9px; background: #fff;
 }
-.order-detail-finance { background: var(--slate-50); container-type: inline-size; }
+.order-detail-finance {
+    padding: 14px; background: var(--slate-50); container-type: inline-size;
+}
 .order-section-heading {
     display: flex; align-items: center; justify-content: space-between;
     gap: 8px; margin-bottom: 6px; color: var(--slate-700); font-size: 12px;
@@ -921,15 +923,19 @@ body.modal-open { overflow: hidden; }
     padding: 5px 0; border-bottom: 1px solid var(--slate-100);
 }
 .production-history-compact small { color: var(--slate-500); }
-.order-detail-finance .compact-finance-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
-.order-detail-finance .compact-finance-item { padding: 7px 8px; }
-.order-detail-finance .compact-finance-item b { font-size: 13px; }
+.order-finance-heading { margin-bottom: 10px; font-size: 15px; }
+.order-detail-finance .compact-finance-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+.order-detail-finance .compact-finance-item { padding: 10px 11px; }
+.order-detail-finance .compact-finance-item span,
+.order-detail-finance .compact-finance-item small { font-size: 11px; }
+.order-detail-finance .compact-finance-item b { margin: 3px 0; font-size: 16px; }
 .order-payments-heading,
-.order-add-payment-heading { margin-top: 9px; }
-.order-payments-heading { font-size: 13px; }
+.order-add-payment-heading { margin-top: 12px; }
+.order-payments-heading,
+.order-add-payment-heading { font-size: 14px; }
 .order-payments-heading > span { font-size: 11px; }
 .order-client-payments {
-    max-height: 132px; overflow-y: auto; border: 1px solid var(--slate-200);
+    max-height: 145px; overflow-y: auto; border: 1px solid var(--slate-200);
     border-radius: 7px; background: #fff;
 }
 .order-payment-row {
@@ -937,16 +943,16 @@ body.modal-open { overflow: hidden; }
     gap: 10px; align-items: center; padding: 8px 9px; font-size: 12px;
 }
 .order-payment-row + .order-payment-row { border-top: 1px solid var(--slate-100); }
-.order-payment-row > span { color: var(--slate-500); font-size: 11.5px; }
+.order-payment-row > span { color: var(--slate-500); font-size: 12px; }
 .order-payment-row > div { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .order-payment-row > div small { display: block; color: var(--amber-600); }
-.order-payment-row > b { font-size: 13px; white-space: nowrap; color: var(--green-700); }
+.order-payment-row > b { font-size: 14px; white-space: nowrap; color: var(--green-700); }
 .order-payment-row.is-pending { opacity: .65; }
 .order-payment-empty { padding: 12px !important; }
 .order-payment-form {
     gap: 6px; margin: 0; padding: 8px;
 }
-.order-detail-actions { margin-top: 10px; padding-top: 9px; }
+.order-detail-actions { justify-content: flex-start; margin-top: 10px; padding-top: 9px; }
 .order-detail-actions .btn,
 .order-detail-actions select { padding-top: 7px; padding-bottom: 7px; }
 

@@ -1164,18 +1164,17 @@ function openOrderDetail(orderId) {
 
     openModal('Заказ ' + orderLabel, `
         <div class="order-detail-compact">
-        <div class="order-summary-grid">
-            <div><span>CRM-ID</span><b>${crmId(o)}</b></div>
-            <div><span>№ производства</span><b class="${o.order_number ? '' : 'text-muted'}">${htmlSafe(o.order_number || 'не присвоен')}</b></div>
-            <div><span>Дата</span><b>${fmtDate(o.created_at)}</b></div>
-            <div><span>Статус</span><b><span class="badge badge-${o.status}">${statusLabel(o.status)}</span></b></div>
-            <div><span>Клиент</span><b>${htmlSafe(client.name || '—')}</b></div>
-            <div><span>Телефон</span><b>${htmlSafe(client.phone || '—')}</b></div>
-            <div class="order-summary-suppliers"><span>Поставщик(и)</span><b>${htmlSafe(supplierIds.map(supplierName).join(', ') || '—')}</b></div>
-        </div>
-
         <div class="order-detail-columns">
             <div class="order-detail-main">
+                <div class="order-summary-grid">
+                    <div><span>CRM-ID</span><b>${crmId(o)}</b></div>
+                    <div><span>№ производства</span><b class="${o.order_number ? '' : 'text-muted'}">${htmlSafe(o.order_number || 'не присвоен')}</b></div>
+                    <div><span>Дата</span><b>${fmtDate(o.created_at)}</b></div>
+                    <div><span>Клиент</span><b>${htmlSafe(client.name || '—')}</b></div>
+                    <div><span>Телефон</span><b>${htmlSafe(client.phone || '—')}</b></div>
+                    <div class="order-summary-suppliers"><span>Поставщик(и)</span><b>${htmlSafe(supplierIds.map(supplierName).join(', ') || '—')}</b></div>
+                </div>
+
                 <div class="order-section-heading"><b>Товары</b><span>${o.items.length} поз.</span></div>
                 <div class="order-items-scroll">
                     <table class="items-table order-items-compact">
@@ -1213,7 +1212,7 @@ function openOrderDetail(orderId) {
             </div>
 
             <aside class="order-detail-finance">
-                <div class="order-section-heading"><b>Финансы</b></div>
+                <div class="order-section-heading order-finance-heading"><b>Финансы</b></div>
                 <div class="compact-finance-grid">
                     <div class="compact-finance-item"><span>Продажа</span><b>${fmtCur(c.totalSale)}</b></div>
                     <div class="compact-finance-item"><span>Закупка</span><b>${fmtCur(c.totalPurchase)}</b></div>
@@ -1268,14 +1267,8 @@ function openOrderDetail(orderId) {
         </div>
 
         <div class="form-actions order-detail-actions">
-            <div style="display:flex;gap:8px;margin-right:auto">
-                <button class="btn btn-outline" onclick="openOrderEditForm(${o.id})">Редактировать</button>
-                <button class="btn btn-danger" onclick="deleteOrder(${o.id})">Удалить заказ</button>
-            </div>
-            <select id="modalStatusSelect" style="padding:8px 12px;border:1px solid var(--slate-300);border-radius:6px;font-size:13px">
-                ${Object.entries(STATUS_LABELS).map(([k,v]) => `<option value="${k}" ${o.status===k?'selected':''}>${v}</option>`).join('')}
-            </select>
-            <button class="btn btn-success" onclick="changeOrderStatus(${o.id})">Сохранить статус</button>
+            <button class="btn btn-outline" onclick="openOrderEditForm(${o.id})">Редактировать</button>
+            <button class="btn btn-danger" onclick="deleteOrder(${o.id})">Удалить заказ</button>
         </div>
         </div>
     `);
