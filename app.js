@@ -779,6 +779,7 @@ function renderDelivery() {
             <td data-label="" class="no-print row-actions delivery-actions">
                 <button class="btn btn-sm btn-delivery-items" onclick="event.stopPropagation();openDeliveryComposition(${o.id})">Состав</button>
                 <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();removeOrderFromDelivery(${o.id})">Убрать</button>
+                <button class="btn btn-sm btn-success" onclick="event.stopPropagation();markOrderDelivered(${o.id})">Доставлен</button>
             </td>
         </tr>`;
     }).join('') : '<tr><td colspan="6" class="empty-state">Пока ни один заказ не добавлен в доставку</td></tr>';
@@ -867,15 +868,20 @@ window.addEventListener('afterprint', () => {
     document.body.classList.remove('print-delivery-order');
 });
 
-window.moveOrderToDelivery = async function(orderId) {
+window.toggleOrderDelivery = async function(orderId) {
     const o = orders.find(x => x.id === orderId);
-    if (!o || o.delivery_status === 'manual') return;
-    const ok = await sbUpdateOrder(o, { delivery_status: 'manual' });
+    if (!o || o.delivery_status === 'delivered' || o.status === 'delivered') return;
+    const inDelivery = o.delivery_status === 'manual';
+    const nextStatus = inDelivery ? null : 'manual';
+    const ok = await sbUpdateOrder(o, { delivery_status: nextStatus });
     if (!ok) return;
-    o.delivery_status = 'manual';
+    o.delivery_status = nextStatus;
     renderOrders();
-    dbToast('Заказ добавлен в доставку', true);
+    dbToast(inDelivery ? 'Заказ убран из доставки' : 'Заказ добавлен в доставку', true);
 };
+
+// Совместимость со страницами, которые могли остаться открытыми со старой версией.
+window.moveOrderToDelivery = window.toggleOrderDelivery;
 
 window.removeOrderFromDelivery = async function(orderId) {
     const o = orders.find(x => x.id === orderId);
@@ -885,6 +891,17 @@ window.removeOrderFromDelivery = async function(orderId) {
     o.delivery_status = null;
     renderDelivery();
     dbToast('Заказ убран из доставки', true);
+};
+
+window.markOrderDelivered = async function(orderId) {
+    const o = orders.find(x => x.id === orderId);
+    if (!o || o.delivery_status !== 'manual') return;
+    const ok = await sbUpdateOrder(o, { delivery_status: 'delivered', status: 'delivered' });
+    if (!ok) return;
+    o.delivery_status = 'delivered';
+    o.status = 'delivered';
+    renderDelivery();
+    dbToast('Заказ отмечен как доставленный', true);
 };
 
 window.printDeliverySheet = function() {
@@ -992,11 +1009,18 @@ function orderColumnCell(key, o, c, supplierNames) {
         case 'remaining':
             return `<td class="col-remaining font-mono text-right ${c.clientDebt > 0 ? 'text-red' : ''}" data-label="Осталось">${c.clientDebt > 0 ? fmtCur(c.clientDebt) : '—'}</td>`;
         case 'delivery':
+            if (o.delivery_status === 'delivered' || o.status === 'delivered') {
+                return `<td class="col-delivery" data-label="Доставка">
+                    <span class="delivery-state-delivered">✓ Доставлен</span>
+                </td>`;
+            }
+            const inDelivery = o.delivery_status === 'manual';
             return `<td class="col-delivery" data-label="Доставка">
-                <button class="btn btn-sm ${o.delivery_status === 'manual' ? 'btn-delivery-added' : 'btn-delivery'}"
-                    ${o.delivery_status === 'manual' ? 'disabled' : ''}
-                    onclick="event.stopPropagation();moveOrderToDelivery(${o.id})">
-                    ${o.delivery_status === 'manual' ? 'В доставке' : 'В доставку'}
+                <button class="btn btn-sm ${inDelivery ? 'btn-delivery-added' : 'btn-delivery'}"
+                    aria-pressed="${inDelivery ? 'true' : 'false'}"
+                    title="${inDelivery ? 'Убрать заказ из доставки' : 'Добавить заказ в доставку'}"
+                    onclick="event.stopPropagation();toggleOrderDelivery(${o.id})">
+                    ${inDelivery ? 'Убрать' : 'В доставку'}
                 </button>
             </td>`;
         case 'client':

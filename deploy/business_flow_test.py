@@ -65,6 +65,27 @@ def main():
     order['version'] = delivery['version']
     print('manual_delivery_queue: yes')
 
+    removed = call('/api/query', {'table':'orders','action':'update','filters':[
+        {'column':'id','op':'eq','value':order_id},{'column':'version','op':'eq','value':order['version']}],
+        'values':{'delivery_status':None}})['data']
+    assert removed['delivery_status'] is None
+    order['version'] = removed['version']
+    print('manual_delivery_toggle_off: yes')
+
+    delivery = call('/api/query', {'table':'orders','action':'update','filters':[
+        {'column':'id','op':'eq','value':order_id},{'column':'version','op':'eq','value':order['version']}],
+        'values':{'delivery_status':'manual'}})['data']
+    assert delivery['delivery_status'] == 'manual'
+    order['version'] = delivery['version']
+
+    delivered = call('/api/query', {'table':'orders','action':'update','filters':[
+        {'column':'id','op':'eq','value':order_id},{'column':'version','op':'eq','value':order['version']}],
+        'values':{'delivery_status':'delivered','status':'delivered'}})['data']
+    assert delivered['delivery_status'] == 'delivered'
+    assert delivered['status'] == 'delivered'
+    order['version'] = delivered['version']
+    print('delivery_completed: queue_removed=yes order_marked=yes')
+
     expense_key = str(uuid.uuid4())
     expense = {'id':990000001,'date':'2026-07-13','type':'expense','entity_type':'supplier',
                'entity_id':supplier_id,'order_id':order_id,'amount':3000,
