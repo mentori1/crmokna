@@ -2545,7 +2545,11 @@ function renderFinances() {
     const finMonthsBox = document.getElementById('finMonths');
     finMonthsBox.innerHTML = html;
     finMonthsBox.querySelectorAll('.cat-item').forEach(btn => {
-        btn.addEventListener('click', () => { window.finMonth = btn.dataset.fmonth; renderFinances(); });
+        btn.addEventListener('click', () => {
+            window.finMonth = btn.dataset.fmonth;
+            localStorage.setItem('finance_month', window.finMonth);
+            renderFinances();
+        });
     });
     // Подсветка активной кнопки Все/Доходы/Расходы
     document.querySelectorAll('#finTypeToggle .fin-tab').forEach(b =>
@@ -2574,12 +2578,13 @@ function renderFinances() {
 }
 
 window.finType = window.finType || '';    // '', income, expense
-window.finMonth = window.finMonth || '';   // '', 'YYYY-MM'
+window.finMonth = typeof window.finMonth === 'string'
+    ? window.finMonth
+    : (localStorage.getItem('finance_month') || '');   // '', 'YYYY-MM'
 // Переключатель Все / Доходы / Расходы
 document.querySelectorAll('#finTypeToggle .fin-tab').forEach(btn => {
     btn.addEventListener('click', () => {
         window.finType = btn.dataset.fintype || '';
-        window.finMonth = '';               // сбрасываем месяц при смене типа
         renderFinances();
     });
 });
