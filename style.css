@@ -1145,27 +1145,32 @@ body.modal-open { overflow: hidden; }
     border-radius: 6px; background: #fff; font: inherit;
 }
 .ola-salary-values {
-    display: grid; grid-template-columns: minmax(150px, 1fr) 145px minmax(140px, 1fr) minmax(140px, 1fr) minmax(150px, 1fr);
-    align-items: end; gap: 10px;
+    display: grid; grid-template-columns: minmax(150px, 1fr) minmax(178px, .95fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(150px, 1fr);
+    align-items: stretch; gap: 10px;
 }
 .ola-salary-values > div {
-    min-height: 62px; padding: 10px 12px; border-radius: 8px;
+    min-height: 78px; padding: 10px 12px; border-radius: 8px;
     background: var(--slate-50); border: 1px solid var(--slate-200);
+    display: flex; flex-direction: column; justify-content: center;
 }
 .ola-salary-values span,
 .ola-salary-values label { display: block; margin-bottom: 3px; color: var(--slate-500); font-size: 11px; }
 .ola-salary-values b { display: block; font-size: 20px; }
-.ola-rate-field > span { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--slate-700); font-size: 14px; }
+.ola-rate-controls { display: flex; align-items: center; gap: 6px; }
+.ola-rate-controls > span { display: flex; align-items: center; gap: 4px; margin: 0; color: var(--slate-700); font-size: 14px; }
 .ola-rate-field input {
-    width: 82px; padding: 7px 8px; border: 1px solid var(--slate-300);
+    width: 62px; padding: 6px 7px; border: 1px solid var(--slate-300);
     border-radius: 6px; font: inherit;
 }
-.ola-rate-field .btn { margin-top: 5px; padding: 4px 8px; }
+.ola-rate-field .btn { margin: 0; padding: 5px 7px; white-space: nowrap; }
 .ola-salary-total { border-color: var(--green-100) !important; background: var(--green-50) !important; }
 .ola-salary-total b { color: var(--green-700); }
+.ola-salary-total small { margin-top: 2px; color: var(--slate-500); font-size: 9px; }
 .ola-salary-due.has-debt { border-color: var(--red-100); background: var(--red-50); }
 .ola-salary-due.has-debt b { color: var(--red-600); }
 .ola-salary-due.is-paid { border-color: var(--green-100); background: var(--green-50); }
+.ola-salary-due.is-overpaid { border-color: #fde68a; background: #fffbeb; }
+.ola-salary-due.is-overpaid b { color: #b45309; font-size: 16px; }
 .employee-section-title {
     margin: 16px 0 8px; color: var(--slate-700); font-size: 13px; font-weight: 700;
 }
@@ -1175,19 +1180,24 @@ body.modal-open { overflow: hidden; }
     border: 1px solid var(--slate-200); border-radius: 8px; background: var(--slate-50);
 }
 .salary-payment-form input { padding: 8px 9px; }
-.salary-payment-form > .btn { height: 36px; }
+.salary-payment-form-actions { display: flex; gap: 6px; }
+.salary-payment-form-actions .btn { height: 36px; white-space: nowrap; }
+.salary-form-hint { margin: 6px 2px 0; color: var(--slate-500); font-size: 10px; }
 .salary-history {
     max-height: 220px; overflow-y: auto; border: 1px solid var(--slate-200);
     border-radius: 8px; background: #fff;
 }
 .salary-history-row {
-    display: grid; grid-template-columns: 90px 145px minmax(0, 1fr) auto;
+    display: grid; grid-template-columns: 90px 135px minmax(0, 1fr) auto auto;
     gap: 10px; align-items: center; padding: 9px 11px; font-size: 12px;
 }
 .salary-history-row + .salary-history-row { border-top: 1px solid var(--slate-100); }
 .salary-history-row > span { color: var(--slate-500); }
-.salary-history-row > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.salary-history-note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .salary-history-row > b { color: var(--green-700); white-space: nowrap; }
+.salary-history-row.is-adjustment > b { color: var(--red-600); }
+.salary-history-actions { display: flex; gap: 5px; }
+.salary-history-actions .btn { padding: 4px 7px; font-size: 10px; }
 
 .items-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
 .items-table th {
@@ -1281,7 +1291,7 @@ body.modal-open { overflow: hidden; }
     .ola-salary-values { grid-template-columns: 1fr 1fr; }
     .salary-payment-form { grid-template-columns: 1fr 1fr; }
     .salary-payment-note { grid-column: 1 / -1; }
-    .salary-payment-form > .btn { grid-column: 1 / -1; }
+    .salary-payment-form-actions { grid-column: 1 / -1; justify-content: flex-end; }
     .order-detail-columns { grid-template-columns: 1fr; }
     .order-summary-grid { grid-template-columns: 1fr 1fr; }
 
@@ -1503,9 +1513,11 @@ body.modal-open { overflow: hidden; }
     .ola-salary-values { grid-template-columns: 1fr; }
     .salary-payment-form { grid-template-columns: 1fr; }
     .salary-payment-note,
-    .salary-payment-form > .btn { grid-column: auto; }
+    .salary-payment-form-actions { grid-column: auto; }
+    .salary-payment-form-actions .btn { flex: 1; }
     .salary-history-row { grid-template-columns: 82px 1fr auto; }
     .salary-history-row > span:nth-child(2) { display: none; }
+    .salary-history-actions { grid-column: 1 / -1; justify-content: flex-end; }
     .order-summary-grid { grid-template-columns: 1fr 1fr; }
     .order-summary-suppliers { grid-column: 1 / -1; }
     .order-detail-open .modal-body { padding: 12px; }

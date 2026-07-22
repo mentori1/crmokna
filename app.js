@@ -2350,7 +2350,7 @@ function olaSalaryRateForMonth(month) {
 
 function olaSalaryTurnover(month) {
     return orders
-        .filter(o => (o.created_at || '').slice(0, 7) === month)
+        .filter(o => o.manager_key === 'olya' && (o.created_at || '').slice(0, 7) === month)
         .reduce((sum, order) => sum + calcOrder(order).totalSale, 0);
 }
 
@@ -2362,6 +2362,34 @@ function formatSalaryMonth(month) {
 
 function olaPaymentsForMonth(month) {
     return salaryPayments.filter(p => p.employee_key === 'olya' && p.salary_month === month && !p.deleted_at);
+}
+
+function olaSalarySummary(month, options = {}) {
+    const rate = Number.isFinite(+options.rate) ? +options.rate : olaSalaryRateForMonth(month);
+    const entries = olaPaymentsForMonth(month)
+        .filter(payment => payment.id !== options.excludePaymentId);
+    const turnover = olaSalaryTurnover(month);
+    const grossSalary = turnover * rate / 100;
+    const paid = entries.reduce((sum, payment) => {
+        const amount = Number(payment.amount || 0);
+        return sum + (amount > 0 ? amount : 0);
+    }, 0);
+    const adjustments = entries.reduce((sum, payment) => {
+        const amount = Number(payment.amount || 0);
+        return sum + (amount < 0 ? amount : 0);
+    }, 0);
+    const salary = Math.max(0, grossSalary + adjustments);
+    return {
+        rate, turnover, grossSalary, paid, adjustments, salary,
+        remaining: Math.max(0, salary - paid),
+        overpaid: Math.max(0, paid - salary),
+    };
+}
+
+function olaSalaryDueText(summary) {
+    if (summary.remaining > 0) return fmtCurExact(summary.remaining);
+    if (summary.overpaid > 0) return `Переплата ${fmtCurExact(summary.overpaid)}`;
+    return 'Выплачено';
 }
 
 window.openEmployees = function() {
@@ -2377,17 +2405,17 @@ function renderOlaSalary() {
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const months = [...new Set([
         currentMonth,
-        ...orders.map(o => (o.created_at || '').slice(0, 7)).filter(Boolean),
-        ...salaryPayments.map(p => p.salary_month).filter(Boolean),
+        ...orders.filter(o => o.manager_key === 'olya').map(o => (o.created_at || '').slice(0, 7)).filter(Boolean),
+        ...salaryPayments.filter(p => !p.deleted_at).map(p => p.salary_month).filter(Boolean),
     ])].sort().reverse();
     if (!window.olaSalaryMonth || !months.includes(window.olaSalaryMonth)) window.olaSalaryMonth = currentMonth;
     const month = window.olaSalaryMonth;
-    const rate = olaSalaryRateForMonth(month);
-    const turnover = olaSalaryTurnover(month);
-    const salary = turnover * rate / 100;
-    const monthPayments = olaPaymentsForMonth(month);
-    const paid = monthPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-    const remaining = Math.max(0, salary - paid);
+    const summary = olaSalarySummary(month);
+    const { rate, turnover, grossSalary, paid, adjustments, salary, remaining, overpaid } = summary;
+    const editingPayment = salaryPayments.find(payment =>
+        payment.id === Number(window.olaEditingPaymentId) && !payment.deleted_at
+    ) || null;
+    if (window.olaEditingPaymentId && !editingPayment) window.olaEditingPaymentId = null;
     const history = [...salaryPayments]
         .filter(p => p.employee_key === 'olya' && !p.deleted_at)
         .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.id || 0) - (a.id || 0));
@@ -2397,50 +2425,69 @@ function renderOlaSalary() {
 
     panel.innerHTML = `
         <div class="ola-salary-head">
-            <div><h2>Оля</h2><p>Зарплата считается от суммы продаж в созданных заказах за месяц</p></div>
-            <select id="olaSalaryMonth" onchange="window.olaSalaryMonth=this.value;renderOlaSalary()">${monthOptions}</select>
+            <div><h2>Оля</h2><p>Зарплата считается от продаж в заказах, закреплённых за Олей</p></div>
+            <select id="olaSalaryMonth" onchange="selectOlaSalaryMonth(this.value)">${monthOptions}</select>
         </div>
         <div class="ola-salary-values">
             <div><span>Оборот по продажам</span><b>${fmtCur(turnover)}</b></div>
             <div class="ola-rate-field">
                 <label for="olaSalaryRate">Ставка</label>
-                <span><input id="olaSalaryRate" type="number" min="0" max="100" step="0.1" value="${rate}" oninput="previewOlaSalary()"> %</span>
-                <button class="btn btn-sm btn-outline" onclick="saveOlaSalaryRate()">Сохранить</button>
+                <div class="ola-rate-controls">
+                    <span><input id="olaSalaryRate" type="number" min="0" max="100" step="0.1" value="${rate}" oninput="previewOlaSalary()"> %</span>
+                    <button class="btn btn-sm btn-outline" onclick="saveOlaSalaryRate()">Сохранить</button>
+                </div>
             </div>
-            <div class="ola-salary-total"><span>Начислено</span><b id="olaSalaryTotal" data-turnover="${turnover}" data-paid="${paid}">${fmtCurExact(salary)}</b></div>
+            <div class="ola-salary-total"><span>Начислено</span><b id="olaSalaryTotal" data-turnover="${turnover}" data-paid="${paid}" data-adjustments="${adjustments}">${fmtCurExact(salary)}</b>${adjustments ? `<small>До корректировок ${fmtCurExact(grossSalary)}</small>` : ''}</div>
             <div><span>Выплачено</span><b>${fmtCurExact(paid)}</b></div>
-            <div class="ola-salary-due ${remaining > 0 ? 'has-debt' : 'is-paid'}"><span>Осталось выплатить</span><b id="olaSalaryDue">${remaining > 0 ? fmtCurExact(remaining) : 'Выплачено'}</b></div>
+            <div id="olaSalaryDueCard" class="ola-salary-due ${remaining > 0 ? 'has-debt' : overpaid > 0 ? 'is-overpaid' : 'is-paid'}"><span>Осталось выплатить</span><b id="olaSalaryDue">${olaSalaryDueText(summary)}</b></div>
         </div>
 
-        <div class="employee-section-title">Внести выплату за ${formatSalaryMonth(month)}</div>
+        <div class="employee-section-title">${editingPayment ? 'Редактировать запись' : 'Внести выплату или корректировку'} за ${formatSalaryMonth(month)}</div>
         <div class="salary-payment-form">
             <div class="form-group">
                 <label>Сумма ₽</label>
-                <input type="number" id="olaPayoutAmount" min="0" step="any" value="${remaining > 0 ? remaining.toFixed(2) : ''}" placeholder="0">
+                <input type="number" id="olaPayoutAmount" step="any" value="${editingPayment ? Number(editingPayment.amount) : remaining > 0 ? remaining.toFixed(2) : ''}" placeholder="5000 или -1000">
             </div>
             <div class="form-group">
-                <label>Дата выплаты</label>
-                <input type="date" id="olaPayoutDate" value="${todayLocalDate()}">
+                <label>Дата</label>
+                <input type="date" id="olaPayoutDate" value="${editingPayment?.date || todayLocalDate()}">
             </div>
             <div class="form-group salary-payment-note">
                 <label>Примечание</label>
-                <input type="text" id="olaPayoutNote" placeholder="Аванс / остаток / перевод">
+                <input type="text" id="olaPayoutNote" value="${htmlSafe(editingPayment?.note || '')}" placeholder="Аванс / штраф / корректировка">
             </div>
-            <button class="btn btn-primary" ${remaining <= 0 ? 'disabled' : ''} onclick="addOlaSalaryPayment()">Добавить выплату</button>
+            <div class="salary-payment-form-actions">
+                ${editingPayment ? '<button class="btn btn-outline" onclick="cancelOlaSalaryPaymentEdit()">Отмена</button>' : ''}
+                <button class="btn btn-primary" onclick="${editingPayment ? `saveOlaSalaryPayment(${editingPayment.id})` : 'addOlaSalaryPayment()'}">${editingPayment ? 'Сохранить' : 'Добавить'}</button>
+            </div>
         </div>
 
-        <div class="employee-section-title">История выплат</div>
+        <div class="salary-form-hint">Положительная сумма — выплата, отрицательная — штраф или другая корректировка начисления.</div>
+        <div class="employee-section-title">История выплат и корректировок</div>
         <div class="salary-history">
-            ${history.length ? history.map(payment => `
-                <div class="salary-history-row">
+            ${history.length ? history.map(payment => {
+                const amount = Number(payment.amount || 0);
+                return `
+                <div class="salary-history-row ${amount < 0 ? 'is-adjustment' : ''}">
                     <span>${fmtDate(payment.date)}</span>
                     <span>${formatSalaryMonth(payment.salary_month)}</span>
-                    <div>${htmlSafe(payment.note || 'Выплата зарплаты')}</div>
-                    <b>${fmtCurExact(payment.amount)}</b>
-                </div>`).join('') : '<div class="empty-state">Выплат пока не было</div>'}
+                    <div class="salary-history-note">${htmlSafe(payment.note || (amount < 0 ? 'Корректировка' : 'Выплата зарплаты'))}</div>
+                    <b>${fmtCurExact(amount)}</b>
+                    <div class="salary-history-actions">
+                        <button class="btn btn-sm btn-outline" onclick="editOlaSalaryPayment(${payment.id})">Изменить</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteOlaSalaryPayment(${payment.id})">Удалить</button>
+                    </div>
+                </div>`;
+            }).join('') : '<div class="empty-state">Выплат и корректировок пока не было</div>'}
         </div>
     `;
 }
+
+window.selectOlaSalaryMonth = function(month) {
+    window.olaSalaryMonth = month;
+    window.olaEditingPaymentId = null;
+    renderOlaSalary();
+};
 
 window.previewOlaSalary = function() {
     const input = document.getElementById('olaSalaryRate');
@@ -2449,10 +2496,19 @@ window.previewOlaSalary = function() {
     const rate = Number(String(input.value).replace(',', '.'));
     const turnover = +total.dataset.turnover || 0;
     const paid = +total.dataset.paid || 0;
-    const salary = turnover * (Number.isFinite(rate) ? rate : 0) / 100;
+    const adjustments = +total.dataset.adjustments || 0;
+    const salary = Math.max(0, turnover * (Number.isFinite(rate) ? rate : 0) / 100 + adjustments);
     total.textContent = fmtCurExact(salary);
     const due = document.getElementById('olaSalaryDue');
-    if (due) due.textContent = salary - paid > 0 ? fmtCurExact(salary - paid) : 'Выплачено';
+    const dueCard = document.getElementById('olaSalaryDueCard');
+    const remaining = Math.max(0, salary - paid);
+    const overpaid = Math.max(0, paid - salary);
+    if (due) due.textContent = remaining > 0 ? fmtCurExact(remaining) : overpaid > 0 ? `Переплата ${fmtCurExact(overpaid)}` : 'Выплачено';
+    if (dueCard) {
+        dueCard.classList.toggle('has-debt', remaining > 0);
+        dueCard.classList.toggle('is-overpaid', overpaid > 0);
+        dueCard.classList.toggle('is-paid', remaining <= 0 && overpaid <= 0);
+    }
 };
 
 window.saveOlaSalaryRate = async function() {
@@ -2471,21 +2527,43 @@ window.saveOlaSalaryRate = async function() {
 
 let pendingOlaPayoutKey = null;
 
-window.addOlaSalaryPayment = async function() {
-    const amount = Number(String(document.getElementById('olaPayoutAmount')?.value || '').replace(',', '.'));
-    const date = document.getElementById('olaPayoutDate')?.value || '';
-    const note = document.getElementById('olaPayoutNote')?.value.trim() || '';
-    if (!Number.isFinite(amount) || amount <= 0) { dbToast('Укажите сумму выплаты', false); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { dbToast('Укажите дату выплаты', false); return; }
+function readOlaSalaryPaymentForm() {
+    return {
+        amount: Number(String(document.getElementById('olaPayoutAmount')?.value || '').replace(',', '.')),
+        date: document.getElementById('olaPayoutDate')?.value || '',
+        note: document.getElementById('olaPayoutNote')?.value.trim() || '',
+    };
+}
 
-    const rate = olaSalaryRateForMonth(window.olaSalaryMonth);
-    const salary = olaSalaryTurnover(window.olaSalaryMonth) * rate / 100;
-    const paid = olaPaymentsForMonth(window.olaSalaryMonth).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-    const remaining = Math.max(0, salary - paid);
-    if (amount > remaining + 0.0001) {
-        dbToast(`Сумма больше остатка (${fmtCurExact(remaining)})`, false);
-        return;
+function validateOlaSalaryPaymentForm(values, excludePaymentId = null, existingAmount = 0) {
+    if (!Number.isFinite(values.amount) || Math.abs(values.amount) < 0.005) {
+        dbToast('Укажите ненулевую сумму', false);
+        return false;
     }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(values.date)) {
+        dbToast('Укажите дату выплаты или корректировки', false);
+        return false;
+    }
+    if (values.amount < 0 && !values.note) {
+        dbToast('Для отрицательной корректировки укажите причину', false);
+        return false;
+    }
+    if (values.amount > 0) {
+        const summary = olaSalarySummary(window.olaSalaryMonth, { excludePaymentId });
+        // Старую переплату можно оставить как есть или уменьшить, даже если
+        // после переназначения заказов текущий расчёт стал меньше выплаты.
+        const allowed = Math.max(summary.remaining, Math.max(0, Number(existingAmount) || 0));
+        if (values.amount > allowed + 0.0001) {
+            dbToast(`Сумма больше допустимой (${fmtCurExact(allowed)})`, false);
+            return false;
+        }
+    }
+    return true;
+}
+
+window.addOlaSalaryPayment = async function() {
+    const values = readOlaSalaryPaymentForm();
+    if (!validateOlaSalaryPaymentForm(values)) return;
 
     pendingOlaPayoutKey = pendingOlaPayoutKey || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
     const row = {
@@ -2493,9 +2571,9 @@ window.addOlaSalaryPayment = async function() {
         employee_key: 'olya',
         employee_name: 'Оля',
         salary_month: window.olaSalaryMonth,
-        date,
-        amount,
-        note,
+        date: values.date,
+        amount: values.amount,
+        note: values.note,
         idempotency_key: pendingOlaPayoutKey,
         created_at: new Date().toISOString(),
     };
@@ -2506,7 +2584,47 @@ window.addOlaSalaryPayment = async function() {
     if (!salaryPayments.some(p => p.idempotency_key === saved.idempotency_key)) salaryPayments.push(saved);
     pendingOlaPayoutKey = null;
     renderOlaSalary();
-    dbToast('Выплата сохранена', true);
+    dbToast(values.amount < 0 ? 'Корректировка сохранена' : 'Выплата сохранена', true);
+};
+
+window.editOlaSalaryPayment = function(paymentId) {
+    const payment = salaryPayments.find(item => item.id === paymentId && !item.deleted_at);
+    if (!payment) return;
+    window.olaSalaryMonth = payment.salary_month;
+    window.olaEditingPaymentId = payment.id;
+    renderOlaSalary();
+    document.getElementById('olaPayoutAmount')?.focus();
+};
+
+window.cancelOlaSalaryPaymentEdit = function() {
+    window.olaEditingPaymentId = null;
+    renderOlaSalary();
+};
+
+window.saveOlaSalaryPayment = async function(paymentId) {
+    const payment = salaryPayments.find(item => item.id === paymentId && !item.deleted_at);
+    if (!payment) { dbToast('Запись уже удалена', false); return; }
+    const values = readOlaSalaryPaymentForm();
+    if (!validateOlaSalaryPaymentForm(values, payment.id, payment.amount)) return;
+    const patch = { amount: values.amount, date: values.date, note: values.note };
+    if (!await sbUpdate('salary_payments', payment, patch, 'изменение выплаты')) return;
+    Object.assign(payment, patch);
+    window.olaEditingPaymentId = null;
+    renderOlaSalary();
+    dbToast(values.amount < 0 ? 'Корректировка изменена' : 'Выплата изменена', true);
+};
+
+window.deleteOlaSalaryPayment = async function(paymentId) {
+    const payment = salaryPayments.find(item => item.id === paymentId && !item.deleted_at);
+    if (!payment) return;
+    const kind = Number(payment.amount || 0) < 0 ? 'корректировку' : 'выплату';
+    if (!confirm(`Удалить ${kind} ${fmtCurExact(payment.amount)} от ${fmtDate(payment.date)}?`)) return;
+    const deletedAt = new Date().toISOString();
+    if (!await sbUpdate('salary_payments', payment, { deleted_at: deletedAt }, 'удаление выплаты')) return;
+    payment.deleted_at = deletedAt;
+    if (window.olaEditingPaymentId === payment.id) window.olaEditingPaymentId = null;
+    renderOlaSalary();
+    dbToast('Запись удалена', true);
 };
 
 function renderFinances() {

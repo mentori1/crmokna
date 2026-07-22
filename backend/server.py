@@ -438,8 +438,8 @@ class Handler(BaseHTTPRequestHandler):
     def validate_salary_payment(payment):
         if payment.get("employee_key") != "olya":
             raise ValueError("Неизвестный сотрудник")
-        if float(payment.get("amount") or 0) <= 0:
-            raise ValueError("Сумма выплаты должна быть больше нуля")
+        if abs(float(payment.get("amount") or 0)) < 0.005:
+            raise ValueError("Сумма выплаты или корректировки не может быть нулевой")
         month = str(payment.get("salary_month") or "")
         date = str(payment.get("date") or "")
         try:
