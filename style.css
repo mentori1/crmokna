@@ -170,6 +170,41 @@ body.modal-open { overflow: hidden; }
 }
 .nav-ic svg { width: 20px; height: 20px; }
 .nav-item.active .nav-ic { opacity: 1; color: #93c5fd; }
+.nav-expand-icon {
+    width: 17px; height: 17px; margin-left: auto; opacity: .55;
+    transition: transform .18s ease, opacity .18s ease;
+}
+.nav-expand-icon svg { width: 17px; height: 17px; }
+.nav-item.active .nav-expand-icon { transform: rotate(90deg); opacity: .9; }
+.orders-subnav {
+    display: none; flex-direction: column; gap: 3px;
+    margin: 1px 0 5px 35px; padding-left: 8px;
+    border-left: 1px solid rgba(148,163,184,.18);
+}
+.nav-item.active + .orders-subnav { display: flex; }
+.orders-subnav-item {
+    width: 100%; min-height: 32px; display: grid;
+    grid-template-columns: auto 1fr auto; align-items: center; gap: 7px;
+    padding: 6px 9px; border: 0; border-radius: 8px;
+    color: rgba(203,213,225,.68); background: transparent;
+    font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
+    transition: color .15s ease, background .15s ease;
+}
+.orders-subnav-item:hover { color: #fff; background: rgba(255,255,255,.055); }
+.orders-subnav-item.active { color: #fff; background: rgba(59,130,246,.16); }
+.orders-subnav-item > b {
+    min-width: 22px; padding: 1px 5px; border-radius: 999px;
+    color: rgba(203,213,225,.72); background: rgba(255,255,255,.06);
+    font-size: 10px; font-weight: 700; text-align: center;
+}
+.orders-subnav-item.active > b { color: #bfdbfe; background: rgba(59,130,246,.18); }
+.orders-subnav-avatar {
+    width: 19px; height: 19px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%; font-size: 9px; font-weight: 800;
+}
+.orders-subnav-avatar.is-all { color: #cbd5e1; background: rgba(148,163,184,.18); font-size: 12px; }
+.orders-subnav-avatar.is-sasha { color: #bfdbfe; background: rgba(37,99,235,.32); }
+.orders-subnav-avatar.is-olya { color: #e9d5ff; background: rgba(126,34,206,.34); }
 
 .sidebar-footer { padding: 12px 14px 16px; }
 .sidebar-action {
@@ -510,6 +545,12 @@ body.modal-open { overflow: hidden; }
     margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
 }
 .section-header .section-title { margin-bottom: 0; }
+.orders-view-note {
+    display: none; align-items: center; gap: 7px;
+    margin-top: 5px; color: var(--slate-500); font-size: 12px;
+}
+.orders-view-note.visible { display: flex; }
+.orders-view-note .order-manager-badge { width: 22px; height: 22px; flex-basis: 22px; font-size: 10px; }
 
 /* ─── Лента месяцев (раздел «Заказы») ─────────────────── */
 
@@ -709,6 +750,15 @@ body.modal-open { overflow: hidden; }
     position: absolute; inset: 0; width: 100%; height: 100%;
     opacity: 0; cursor: pointer; border: 0; border-radius: 50%;
 }
+.order-manager-locked {
+    min-height: 38px; display: flex; align-items: center; gap: 9px;
+    padding: 6px 10px; border: 1px solid var(--slate-200); border-radius: 6px;
+    background: var(--slate-50);
+}
+.order-manager-locked > .order-manager-badge { cursor: default; }
+.order-manager-locked > div { display: flex; flex-direction: column; gap: 1px; }
+.order-manager-locked b { font-size: 13px; color: var(--slate-800); }
+.order-manager-locked small { font-size: 11px; color: var(--slate-500); }
 .orders-toolbar {
     display: flex; justify-content: space-between; align-items: center;
     gap: 10px; margin-bottom: 10px;
@@ -1206,6 +1256,8 @@ body.modal-open { overflow: hidden; }
 
     /* Кликабельные элементы крупнее на тач */
     .nav-item { padding: 13px 14px; }
+    .orders-subnav { margin-left: 38px; }
+    .orders-subnav-item { min-height: 38px; padding: 8px 10px; }
     .nav-icon { font-size: 20px; }
 }
 

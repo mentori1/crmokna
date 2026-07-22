@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Центр окон и дверей — CRM</title>
-    <link rel="stylesheet" href="style.css?v=71">
+    <link rel="stylesheet" href="style.css?v=72">
 </head>
 <body>
 
@@ -82,7 +82,19 @@
         <a href="#" class="nav-item" data-section="orders">
             <span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 3.5V2.8a1 1 0 011-1h4a1 1 0 011 1v.7"/><path d="M8.5 9.5h7M8.5 13h7M8.5 16.5h4.5"/></svg></span>
             <span class="nav-label">Заказы</span>
+            <span class="nav-expand-icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4l6 6-6 6"/></svg></span>
         </a>
+        <div class="orders-subnav" id="ordersSubnav">
+            <button class="orders-subnav-item active" type="button" data-orders-view="all">
+                <span class="orders-subnav-avatar is-all" aria-hidden="true">≡</span><span>Все заказы</span><b id="ordersNavCountAll">0</b>
+            </button>
+            <button class="orders-subnav-item" type="button" data-orders-view="sasha">
+                <span class="orders-subnav-avatar is-sasha">С</span><span>Саша</span><b id="ordersNavCountSasha">0</b>
+            </button>
+            <button class="orders-subnav-item" type="button" data-orders-view="olya">
+                <span class="orders-subnav-avatar is-olya">О</span><span>Оля</span><b id="ordersNavCountOlya">0</b>
+            </button>
+        </div>
         <a href="#" class="nav-item" data-section="clients">
             <span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0112 0"/><path d="M16.5 5.2a3.2 3.2 0 010 5.6M21.5 20a6 6 0 00-4.5-5.8"/></svg></span>
             <span class="nav-label">Клиенты</span>
@@ -190,7 +202,10 @@
         <!-- ─── Orders ─── -->
         <section class="section" id="section-orders">
             <div class="section-header">
-                <h1 class="section-title">Заказы</h1>
+                <div>
+                    <h1 class="section-title" id="ordersSectionTitle">Все заказы</h1>
+                    <div class="orders-view-note" id="ordersViewNote"></div>
+                </div>
                 <button class="btn btn-primary" id="btnNewOrder2">+ Новый заказ</button>
             </div>
             <div class="filters-bar">
@@ -207,15 +222,6 @@
                         <option value="to_client">Доставка клиенту</option>
                         <option value="delivered">Доставлен</option>
                         <option value="closed">Закрыт</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label>Оформил:</label>
-                    <select id="filterManager">
-                        <option value="">Все</option>
-                        <option value="sasha">Саша</option>
-                        <option value="olya">Оля</option>
-                        <option value="unassigned">Не указано</option>
                     </select>
                 </div>
                 <div class="filter-group">
@@ -422,6 +428,6 @@
 </div>
 
 <script src="supabase-local.js?v=54"></script>
-<script src="app.js?v=71"></script>
+<script src="app.js?v=72"></script>
 </body>
 </html>

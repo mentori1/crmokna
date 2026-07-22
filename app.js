@@ -710,11 +710,66 @@ function paymentBar(paid, total) {
 
 const navItems = document.querySelectorAll('.nav-item');
 const sections = document.querySelectorAll('.section');
+const ORDER_VIEW_LABELS = {
+    all: 'Все заказы',
+    sasha: 'Заказы Саши',
+    olya: 'Заказы Оли',
+};
+const savedOrdersView = localStorage.getItem('orders_manager_view');
+window.ordersManagerView = ORDER_VIEW_LABELS[savedOrdersView] ? savedOrdersView : 'all';
+
+function ordersForManagerView(view = window.ordersManagerView) {
+    if (view === 'sasha' || view === 'olya') return orders.filter(o => o.manager_key === view);
+    return orders;
+}
+
+function syncOrdersViewUI() {
+    const view = ORDER_VIEW_LABELS[window.ordersManagerView] ? window.ordersManagerView : 'all';
+    const title = document.getElementById('ordersSectionTitle');
+    const note = document.getElementById('ordersViewNote');
+    if (title) title.textContent = ORDER_VIEW_LABELS[view];
+    document.querySelectorAll('.orders-subnav-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.ordersView === view);
+    });
+    if (note) {
+        if (view === 'sasha' || view === 'olya') {
+            note.className = 'orders-view-note visible';
+            note.innerHTML = `<span class="order-manager-badge ${orderManagerClass(view)}"><span>${orderManagerInitial(view)}</span></span>
+                Новые заказы здесь автоматически оформляются на ${view === 'sasha' ? 'Сашу' : 'Олю'}`;
+        } else {
+            note.className = 'orders-view-note';
+            note.innerHTML = '';
+        }
+    }
+}
+
+function updateOrdersNavCounts() {
+    const values = {
+        ordersNavCountAll: orders.length,
+        ordersNavCountSasha: orders.filter(o => o.manager_key === 'sasha').length,
+        ordersNavCountOlya: orders.filter(o => o.manager_key === 'olya').length,
+    };
+    Object.entries(values).forEach(([id, value]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value.toLocaleString('ru-RU');
+    });
+}
+
+window.setOrdersManagerView = function(view, shouldRender = true) {
+    if (!ORDER_VIEW_LABELS[view]) view = 'all';
+    window.ordersManagerView = view;
+    localStorage.setItem('orders_manager_view', view);
+    window.ordersPage = 1;
+    window.ordersMonth = 'all';
+    syncOrdersViewUI();
+    if (shouldRender && document.getElementById('section-orders')?.classList.contains('active')) renderOrders();
+};
 
 function navigate(sectionId) {
     if (!document.getElementById('section-' + sectionId)) sectionId = 'delivery';
     navItems.forEach(n => n.classList.toggle('active', n.dataset.section === sectionId));
     sections.forEach(s => s.classList.toggle('active', s.id === 'section-' + sectionId));
+    syncOrdersViewUI();
     if (location.hash !== '#' + sectionId) location.hash = sectionId;
     renderSection(sectionId);
     closeSidebarMobile();
@@ -726,8 +781,18 @@ window.addEventListener('hashchange', () => {
 
 navItems.forEach(n => n.addEventListener('click', e => {
     e.preventDefault();
+    if (n.dataset.section === 'orders') setOrdersManagerView('all', false);
     navigate(n.dataset.section);
 }));
+
+document.querySelectorAll('.orders-subnav-item').forEach(item => {
+    item.addEventListener('click', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        setOrdersManagerView(item.dataset.ordersView, false);
+        navigate('orders');
+    });
+});
 
 document.querySelectorAll('[data-section]').forEach(el => {
     if (!el.classList.contains('nav-item')) {
@@ -1047,19 +1112,20 @@ function applyOrdersMonthsState() {
 function renderMonthTabs() {
     const box = document.getElementById('orderMonths');
     if (!box) return;
-    const months = [...new Set(orders.map(o => (o.created_at || '').slice(0, 7)).filter(Boolean))].sort().reverse();
+    const scopedOrders = ordersForManagerView();
+    const months = [...new Set(scopedOrders.map(o => (o.created_at || '').slice(0, 7)).filter(Boolean))].sort().reverse();
     const item = (val, label, count) =>
         `<button class="cat-item ${window.ordersMonth === val ? 'active' : ''}" data-month="${val}">
             <span class="cat-item-label">${label}</span><span class="cat-item-count">${count}</span></button>`;
-    let html = item('all', 'Все', orders.length);
+    let html = item('all', 'Все', scopedOrders.length);
     const byYear = {};
     months.forEach(m => { const y = m.slice(0, 4); (byYear[y] = byYear[y] || []).push(m); });
     Object.keys(byYear).sort().reverse().forEach(y => {
-        const cntY = orders.filter(o => (o.created_at || '').startsWith(y)).length;
+        const cntY = scopedOrders.filter(o => (o.created_at || '').startsWith(y)).length;
         html += `<div class="fin-year-head"><span>${y}</span><b>${cntY}</b></div>`;
         byYear[y].forEach(m => {
             const mo = +m.slice(5, 7);
-            const cnt = orders.filter(o => (o.created_at || '').startsWith(m)).length;
+            const cnt = scopedOrders.filter(o => (o.created_at || '').startsWith(m)).length;
             html += item(m, MONTH_NAMES_FULL[mo - 1], cnt);
         });
     });
@@ -1242,18 +1308,17 @@ window.saveOrderColumnsSettings = async function() {
 };
 
 function renderOrders() {
+    syncOrdersViewUI();
+    updateOrdersNavCounts();
     renderMonthTabs();
     const status = document.getElementById('filterStatus').value;
-    const manager = document.getElementById('filterManager').value;
     const dateFrom = document.getElementById('filterDateFrom').value;
     const dateTo = document.getElementById('filterDateTo').value;
     const month = window.ordersMonth;
 
-    let filtered = orders;
+    let filtered = [...ordersForManagerView()];
     if (month && month !== 'all') filtered = filtered.filter(o => (o.created_at || '').startsWith(month));
     if (status) filtered = filtered.filter(o => o.status === status);
-    if (manager === 'unassigned') filtered = filtered.filter(o => !o.manager_key);
-    else if (manager) filtered = filtered.filter(o => o.manager_key === manager);
     if (dateFrom) filtered = filtered.filter(o => o.created_at >= dateFrom);
     if (dateTo) filtered = filtered.filter(o => o.created_at <= dateTo);
 
@@ -1305,13 +1370,12 @@ function renderOrders() {
     });
 }
 // Сбрасываем страницу при изменении фильтров
-['filterStatus','filterManager','filterDateFrom','filterDateTo'].forEach(id => {
+['filterStatus','filterDateFrom','filterDateTo'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', () => { window.ordersPage = 1; });
 });
 
 document.getElementById('filterStatus').addEventListener('change', renderOrders);
-document.getElementById('filterManager').addEventListener('change', renderOrders);
 document.getElementById('filterDateFrom').addEventListener('change', renderOrders);
 document.getElementById('filterDateTo').addEventListener('change', renderOrders);
 document.getElementById('btnPrintDelivery').addEventListener('click', () => printDeliverySheet('all'));
@@ -2793,6 +2857,15 @@ function openNewOrderForm() {
     // Уникальные названия ранее заказанной продукции — для автодополнения
     const productNames = getProductNameSuggestions();
     const supplierNames = [...new Set(suppliers.map(s => s.name))];
+    const presetManager = window.ordersManagerView === 'sasha' || window.ordersManagerView === 'olya'
+        ? window.ordersManagerView : '';
+    const managerField = presetManager ? `
+        <div class="order-manager-locked">
+            <span class="order-manager-badge ${orderManagerClass(presetManager)}"><span>${orderManagerInitial(presetManager)}</span></span>
+            <div><b>${orderManagerLabel(presetManager)}</b><small>Выбрано разделом «${ORDER_VIEW_LABELS[presetManager]}»</small></div>
+        </div>
+        <input type="hidden" id="formManagerKey" value="${presetManager}">`
+        : `<select id="formManagerKey" required>${orderManagerOptions('', false)}</select>`;
 
     openModal('Новый заказ', `
         <datalist id="clientsList">
@@ -2825,7 +2898,7 @@ function openNewOrderForm() {
             </div>
             <div class="form-group">
                 <label>Заказ оформил</label>
-                <select id="formManagerKey" required>${orderManagerOptions('', false)}</select>
+                ${managerField}
             </div>
             <div class="form-group full">
                 <label>Адрес доставки</label>
