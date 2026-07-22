@@ -6,6 +6,47 @@
 // Данные хранятся на нашем VPS и без авторизации не выдаются.
 const SB = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
+// Открытая вкладка могла продолжать работать на старом app.js после выкладки.
+// Сверяем версию подключённого скрипта с актуальным index.html и, если сервер
+// уже обновлён, один раз открываем ту же страницу с новым номером версии.
+const APP_ASSET_VERSION = (() => {
+    try { return new URL(document.currentScript.src).searchParams.get('v') || 'dev'; }
+    catch (_) { return 'dev'; }
+})();
+
+function startAppVersionWatcher() {
+    let checking = false;
+    const check = async () => {
+        if (checking) return;
+        checking = true;
+        try {
+            const response = await fetch('/?_version_check=' + Date.now(), { cache: 'no-store' });
+            if (!response.ok) return;
+            const html = await response.text();
+            const match = html.match(/app\.js\?v=([^"'&<]+)/);
+            const serverVersion = match?.[1];
+            if (!serverVersion || serverVersion === APP_ASSET_VERSION) return;
+
+            const nextUrl = new URL(location.href);
+            nextUrl.searchParams.set('_appv', serverVersion);
+            location.replace(nextUrl.toString());
+        } catch (error) {
+            // Потеря сети не должна мешать обычной работе CRM.
+            console.debug('version check', error);
+        } finally {
+            checking = false;
+        }
+    };
+
+    setInterval(check, 60_000);
+    window.addEventListener('focus', check);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) check();
+    });
+}
+
+startAppVersionWatcher();
+
 async function ensureAuthenticated() {
     const loginEl = document.getElementById('loginScreen');
     const { data: { session } } = await SB.auth.getSession();
