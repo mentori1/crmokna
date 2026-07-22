@@ -405,6 +405,10 @@ class Handler(BaseHTTPRequestHandler):
                 clean.setdefault("updated_at", now())
             if "created_by" in columns:
                 clean.setdefault("created_by", actor)
+            if table == "orders" and "created_at_time" in columns:
+                # Точное время создания задаёт сервер: поле не показывается в CRM,
+                # но гарантирует правильный порядок нескольких заказов за день.
+                clean["created_at_time"] = now()
         return clean
 
     @staticmethod

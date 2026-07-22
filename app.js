@@ -439,6 +439,16 @@ const clientAddress = id => (clients.find(c => c.id === id) || {}).address || ''
 const supplierName = id => (suppliers.find(s => s.id === id) || {}).name || '—';
 const categoryName = id => (categories.find(c => c.id === id) || {}).name || '—';
 
+// Дата показывается без времени, но внутри одного дня новые заказы идут выше.
+// Для старых записей без created_at_time порядок стабилизируется по CRM-ID.
+function compareOrdersNewestFirst(a, b) {
+    const byDate = String(b.created_at || '').localeCompare(String(a.created_at || ''));
+    if (byDate) return byDate;
+    const byTime = String(b.created_at_time || '').localeCompare(String(a.created_at_time || ''));
+    if (byTime) return byTime;
+    return (Number(b.id) || 0) - (Number(a.id) || 0);
+}
+
 // Стабильный CRM-ID заказа — «якорь» для сопоставления с письмами производства.
 // Сейчас выводится из o.id; при двусторонней синхронизации станет постоянной
 // колонкой в Google Таблице (см. INTEGRATION.md).
@@ -878,7 +888,7 @@ function updateDeliveryPrintControls(rows) {
 function renderDelivery() {
     const rows = orders
         .filter(o => o.delivery_status === 'manual')
-        .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+        .sort(compareOrdersNewestFirst);
 
     const printDate = document.getElementById('deliveryPrintDate');
     if (printDate) printDate.textContent = new Date().toLocaleString('ru-RU', { dateStyle: 'long', timeStyle: 'short' });
@@ -1365,7 +1375,7 @@ function renderOrders() {
     if (dateFrom) filtered = filtered.filter(o => o.created_at >= dateFrom);
     if (dateTo) filtered = filtered.filter(o => o.created_at <= dateTo);
 
-    filtered = filtered.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    filtered = filtered.sort(compareOrdersNewestFirst);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / ORDERS_PER_PAGE));
     if (window.ordersPage > totalPages) window.ordersPage = 1;
@@ -1943,7 +1953,7 @@ window.openClientDetail = function(clientId) {
     const cl = clients.find(x => x.id === clientId);
     if (!cl) return;
     const cOrders = orders.filter(o => o.client_id === cl.id)
-        .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));   // новые сверху
+        .sort(compareOrdersNewestFirst);   // новые сверху
     const totalPurchases = cOrders.reduce((s, o) => s + calcOrder(o).totalSale, 0);
     const totalDebt = cOrders.reduce((s, o) => s + Math.max(0, calcOrder(o).clientDebt), 0);
 
@@ -2166,7 +2176,7 @@ window.openSupplierDetail = function(supplierId) {
     const s = suppliers.find(x => x.id === supplierId);
     if (!s) return;
     const f = supplierFinancials(s.id);
-    const sOrders = f.sOrders.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    const sOrders = f.sOrders.sort(compareOrdersNewestFirst);
     const { totalPurchases, paid, debt } = f;
 
     openModal('Поставщик: ' + s.name, `
@@ -2537,7 +2547,7 @@ document.querySelectorAll('#finTypeToggle .fin-tab').forEach(btn => {
 document.getElementById('btnEmployees').addEventListener('click', openEmployees);
 document.getElementById('btnNewTransaction').addEventListener('click', () => {
     const orderOptions = [...orders]
-        .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+        .sort(compareOrdersNewestFirst)
         .map(o => `<option value="${o.id}">${o.order_number || crmId(o)} — ${clientName(o.client_id)}</option>`)
         .join('');
     openModal('Новая финансовая операция', `
@@ -3162,6 +3172,7 @@ window.saveNewOrder = function() {
         manager_key: managerKey,
         delivery_status: deliveryChoice.noDelivery ? 'not_required' : null,
         created_at: document.getElementById('formCreatedDate').value || new Date().toISOString().slice(0, 10),
+        created_at_time: new Date().toISOString(),
         delivery_date: deliveryDate,
         notes: document.getElementById('formNotes').value.trim(),
         idempotency_key: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()),
