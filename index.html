@@ -75,7 +75,7 @@
         </span>
     </div>
     <nav class="sidebar-nav">
-        <a href="#" class="nav-item active" data-section="delivery">
+        <a href="#" class="nav-item" data-section="delivery">
             <span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.5h11v9h-11z"/><path d="M13.5 9.5h3.8l3.2 3.2v2.8h-7z"/><circle cx="6.5" cy="18" r="1.7"/><circle cx="17" cy="18" r="1.7"/></svg></span>
             <span class="nav-label">Доставка</span>
         </a>
@@ -158,7 +158,7 @@
     <main class="content">
 
         <!-- ─── Delivery ─── -->
-        <section class="section active" id="section-delivery">
+        <section class="section" id="section-delivery">
             <div class="section-header delivery-section-header">
                 <h1 class="section-title">Доставка</h1>
                 <div class="delivery-print-actions no-print">
@@ -427,7 +427,21 @@
     </div>
 </div>
 
+<script>
+// До загрузки данных сразу показываем раздел из адресной строки. Иначе HTML
+// успевает на мгновение показать «Доставку», даже если обновили «Поставщиков».
+(() => {
+    const requested = location.hash.replace('#', '');
+    const sectionId = document.getElementById('section-' + requested) ? requested : 'delivery';
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.section === sectionId);
+    });
+    document.querySelectorAll('.section').forEach(section => {
+        section.classList.toggle('active', section.id === 'section-' + sectionId);
+    });
+})();
+</script>
 <script src="supabase-local.js?v=54"></script>
-<script src="app.js?v=78"></script>
+<script src="app.js?v=79"></script>
 </body>
 </html>
