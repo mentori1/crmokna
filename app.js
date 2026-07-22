@@ -855,9 +855,15 @@ function renderDelivery() {
                     <span>Состав заказа</span>
                     <div class="delivery-print-items">${deliveryItemLines(o, 'is-print-card')}</div>
                 </div>
-                <div class="delivery-print-signature">
-                    <span>Подпись клиента</span>
-                    <div class="delivery-print-signature-line"></div>
+                <div class="delivery-print-confirmation">
+                    <div class="delivery-print-date">
+                        <span>Дата доставки</span>
+                        <div class="delivery-print-field-line"></div>
+                    </div>
+                    <div class="delivery-print-signature">
+                        <span>Подпись клиента</span>
+                        <div class="delivery-print-field-line"></div>
+                    </div>
                 </div>
             </article>`;
         }).join('');
@@ -902,7 +908,10 @@ window.openDeliveryComposition = function(orderId) {
             </div>
             <div class="detail-section-title">Состав заказа</div>
             <div class="delivery-sheet-items">${deliveryItemLines(o)}</div>
-            <div class="delivery-sheet-signature"><span>Подпись клиента</span><div></div></div>
+            <div class="delivery-sheet-confirmation">
+                <div><span>Дата доставки</span><div></div></div>
+                <div><span>Подпись клиента</span><div></div></div>
+            </div>
             <div class="form-actions no-print">
                 <button class="btn btn-outline" onclick="closeModal()">Закрыть</button>
                 <button class="btn btn-primary" onclick="printDeliveryOrder(${o.id})">Распечатать этот заказ</button>
