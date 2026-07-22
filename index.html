@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Центр окон и дверей — CRM</title>
-    <link rel="stylesheet" href="style.css?v=65">
+    <link rel="stylesheet" href="style.css?v=66">
 </head>
 <body>
 
@@ -149,9 +149,12 @@
         <section class="section active" id="section-delivery">
             <div class="section-header delivery-section-header">
                 <h1 class="section-title">Доставка</h1>
-                <button class="btn btn-primary no-print" id="btnPrintDelivery">Распечатать</button>
+                <div class="delivery-print-actions no-print">
+                    <button class="btn btn-outline" id="btnPrintSelectedDelivery" disabled>Распечатать выбранные</button>
+                    <button class="btn btn-primary" id="btnPrintDelivery">Распечатать все</button>
+                </div>
             </div>
-            <p class="text-muted no-print" style="margin:-12px 0 20px">Сюда менеджер вручную добавляет заказы кнопкой «В доставку».</p>
+            <p class="text-muted no-print" style="margin:-12px 0 20px">Отметьте нужные заказы галочками или распечатайте весь список.</p>
             <div class="delivery-print-document" aria-hidden="true">
                 <header class="delivery-print-heading">
                     <div>
@@ -169,11 +172,13 @@
                 <table class="data-table" id="deliveryTable">
                     <thead>
                         <tr>
+                            <th class="delivery-select-col no-print">
+                                <input type="checkbox" id="deliverySelectAll" aria-label="Выбрать все заказы для печати">
+                            </th>
                             <th>№ заказа</th>
                             <th>Осталось получить</th>
                             <th>Телефон</th>
                             <th>Адрес</th>
-                            <th class="print-only">Состав заказа</th>
                             <th class="no-print"></th>
                         </tr>
                     </thead>
@@ -408,6 +413,6 @@
 </div>
 
 <script src="supabase-local.js?v=54"></script>
-<script src="app.js?v=65"></script>
+<script src="app.js?v=66"></script>
 </body>
 </html>

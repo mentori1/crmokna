@@ -697,11 +697,14 @@ body.modal-open { overflow: hidden; }
 .order-column-arrows .btn { width: 34px; justify-content: center; padding: 5px; }
 /* Доставка: контакты, остаток, состав и служебные действия */
 #deliveryTable { table-layout: fixed; width: 100%; min-width: 680px; }
-#deliveryTable th:nth-child(1), #deliveryTable td:nth-child(1) { width: 14%; }
-#deliveryTable th:nth-child(2), #deliveryTable td:nth-child(2) { width: 18%; }
-#deliveryTable th:nth-child(3), #deliveryTable td:nth-child(3) { width: 18%; white-space: nowrap; }
-#deliveryTable th:nth-child(4), #deliveryTable td:nth-child(4) { width: 26%; white-space: normal; word-break: break-word; }
-#deliveryTable th:nth-child(6), #deliveryTable td:nth-child(6) { width: 24%; }
+#deliveryTable .delivery-select-col { width: 44px; text-align: center; }
+#deliveryTable th:nth-child(2), #deliveryTable td:nth-child(2) { width: 12%; }
+#deliveryTable th:nth-child(3), #deliveryTable td:nth-child(3) { width: 16%; }
+#deliveryTable th:nth-child(4), #deliveryTable td:nth-child(4) { width: 17%; white-space: nowrap; }
+#deliveryTable th:nth-child(5), #deliveryTable td:nth-child(5) { width: auto; white-space: normal; word-break: break-word; }
+#deliveryTable th:nth-child(6), #deliveryTable td:nth-child(6) { width: 250px; }
+.delivery-print-actions { display: flex; align-items: center; gap: 8px; }
+.delivery-select-col input { width: 17px; height: 17px; cursor: pointer; accent-color: var(--blue-600); }
 .print-only { display: none !important; }
 .delivery-print-document { display: none; }
 .delivery-actions { justify-content: flex-end; }
@@ -995,6 +998,12 @@ body.modal-open { overflow: hidden; }
 .delivery-sheet-items {
     border: 1px solid var(--slate-200); border-radius: 8px; overflow: hidden;
 }
+.delivery-sheet-signature {
+    display: grid; grid-template-columns: auto minmax(140px, 1fr); align-items: end;
+    gap: 12px; margin-top: 18px; color: var(--slate-600); font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .3px;
+}
+.delivery-sheet-signature > div { min-height: 24px; border-bottom: 1px solid var(--slate-700); }
 
 /* Финансы → Сотрудники: помесячная зарплата и история выплат Оли */
 .finance-header-actions { display: flex; gap: 8px; }
@@ -1385,8 +1394,8 @@ body.modal-open { overflow: hidden; }
 }
 
 @media print {
-    @page { size: A4 portrait; margin: 12mm; }
-    body { display: block; background: #fff; color: #000; }
+    @page { size: A4 portrait; margin: 7mm; }
+    body { display: block; background: #fff; color: #000; font-family: Arial, sans-serif; }
     .sidebar, .sidebar-backdrop, .topbar, .no-print, #dbToast { display: none !important; }
     .main { margin: 0 !important; min-height: 0; }
     .content { padding: 0 !important; }
@@ -1395,64 +1404,76 @@ body.modal-open { overflow: hidden; }
     .delivery-section-header, .delivery-screen-table { display: none !important; }
     .delivery-print-document { display: block !important; }
     .delivery-print-heading {
-        display: flex; align-items: flex-end; justify-content: space-between;
-        gap: 12mm; margin-bottom: 6mm; padding-bottom: 4mm;
-        border-bottom: 2px solid #111827;
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 8mm; margin-bottom: 3mm; padding-bottom: 2.5mm;
+        border-bottom: 1.2px solid #111827;
     }
     .delivery-print-brand {
-        margin-bottom: 1mm; color: #4b5563; font-size: 8.5pt;
+        margin-bottom: .7mm; color: #4b5563; font-size: 7pt;
         font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
     }
     .delivery-print-heading h1 {
-        margin: 0; color: #111827; font-size: 22pt; line-height: 1;
+        margin: 0; color: #111827; font-size: 17pt; line-height: 1;
         letter-spacing: -.025em;
     }
     .delivery-print-meta {
         display: flex; flex-direction: column; align-items: flex-end;
-        flex: 0 0 auto; gap: 1mm; color: #4b5563;
-        font-size: 9pt; line-height: 1.25; text-align: right;
+        flex: 0 0 auto; gap: .5mm; color: #4b5563;
+        font-size: 7.5pt; line-height: 1.2; text-align: right;
     }
-    .delivery-print-meta b { color: #111827; font-size: 10pt; }
+    .delivery-print-meta b { color: #111827; font-size: 8.5pt; }
     .delivery-print-card {
-        margin: 0 0 5mm; overflow: hidden; color: #111827;
-        border: 1.25px solid #111827; border-radius: 3mm;
+        margin: 0 0 2.5mm; overflow: hidden; color: #111827;
+        border: 1px solid #111827; border-radius: 1.5mm;
         break-inside: avoid; page-break-inside: avoid;
     }
+    .delivery-print-card.print-excluded { display: none !important; }
+    .delivery-print-card.print-page-break { break-after: page; page-break-after: always; }
     .delivery-print-card:last-child { margin-bottom: 0; }
     .delivery-print-card-head {
-        display: grid; grid-template-columns: minmax(0, 1fr) 62mm;
+        display: grid; grid-template-columns: minmax(0, 1fr) 50mm;
         background: #f3f4f6; border-bottom: 1px solid #9ca3af;
     }
     .delivery-print-card-head > div,
     .delivery-print-contacts > div,
-    .delivery-print-composition { padding: 3.5mm 4mm; min-width: 0; }
+    .delivery-print-composition,
+    .delivery-print-signature { padding: 2mm 2.5mm; min-width: 0; }
     .delivery-print-card span {
-        display: block; margin-bottom: 1mm; color: #4b5563;
-        font-size: 8pt; font-weight: 700; letter-spacing: .045em;
+        display: block; margin-bottom: .5mm; color: #4b5563;
+        font-size: 6.8pt; font-weight: 700; letter-spacing: .045em;
         line-height: 1.2; text-transform: uppercase;
     }
     .delivery-print-card strong { display: block; color: #111827; line-height: 1.25; }
-    .delivery-print-order-number strong { font-size: 17pt; }
+    .delivery-print-order-number strong { font-size: 13pt; }
     .delivery-print-balance {
         border-left: 1px solid #9ca3af; text-align: right;
     }
-    .delivery-print-balance strong { font-size: 15pt; white-space: nowrap; }
+    .delivery-print-balance strong { font-size: 12pt; white-space: nowrap; }
     .delivery-print-contacts {
-        display: grid; grid-template-columns: 58mm minmax(0, 1fr);
+        display: grid; grid-template-columns: minmax(38mm, .8fr) 44mm minmax(0, 1.35fr);
         border-bottom: 1px solid #d1d5db;
     }
+    .delivery-print-client,
     .delivery-print-phone { border-right: 1px solid #d1d5db; }
-    .delivery-print-phone strong { font-size: 12pt; white-space: nowrap; }
+    .delivery-print-client strong { font-size: 9pt; overflow-wrap: anywhere; }
+    .delivery-print-phone strong { font-size: 9.5pt; white-space: nowrap; }
     .delivery-print-address strong {
-        font-size: 11pt; overflow-wrap: anywhere; word-break: normal;
+        font-size: 9pt; overflow-wrap: anywhere; word-break: normal;
     }
-    .delivery-print-composition { padding-top: 3mm; padding-bottom: 3mm; }
+    .delivery-print-composition { padding-top: 1.7mm; padding-bottom: 1.7mm; }
     .delivery-print-items .delivery-item-line {
-        padding: 1.8mm 0; font-size: 10pt; line-height: 1.3;
+        padding: .9mm 0; font-size: 8.8pt; line-height: 1.25;
     }
     .delivery-print-items .delivery-item-line + .delivery-item-line {
-        margin: 0; padding-top: 1.8mm; border-top: 1px solid #e5e7eb;
+        margin: 0; padding-top: .9mm; border-top: 1px solid #e5e7eb;
     }
+    .delivery-print-signature {
+        display: grid; grid-template-columns: auto minmax(35mm, 1fr);
+        align-items: end; gap: 3mm; padding-top: 1.8mm; padding-bottom: 2.2mm;
+        border-top: 1px solid #d1d5db;
+    }
+    .delivery-print-signature > span { margin: 0; white-space: nowrap; }
+    .delivery-print-signature-line { min-height: 4mm; border-bottom: 1px solid #111827; }
 
     body.print-delivery-order .main { display: none !important; }
     body.print-delivery-order .modal-overlay {
@@ -1470,6 +1491,7 @@ body.modal-open { overflow: hidden; }
     }
     body.print-delivery-order .delivery-sheet-items { border-color: #94a3b8; }
     body.print-delivery-order .delivery-item-line { padding: 12px; }
+    body.print-delivery-order .delivery-sheet-signature { margin-top: 10mm; }
 }
 
 /* ─── Форма «Добавить платёж» в карточке заказа ───────── */

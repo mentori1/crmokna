@@ -754,6 +754,38 @@ function deliveryItemLines(order, className = '') {
     }).join('');
 }
 
+const deliveryPrintSelection = new Set();
+const DELIVERY_ORDERS_PER_PAGE = 5;
+
+function deliveryPrintSummary(count) {
+    const pages = count ? Math.ceil(count / DELIVERY_ORDERS_PER_PAGE) : 0;
+    return `Заказов: ${count} · Листов: ${pages}`;
+}
+
+function updateDeliveryPrintControls(rows) {
+    const rowIds = rows.map(o => o.id);
+    const available = new Set(rowIds);
+    [...deliveryPrintSelection].forEach(id => {
+        if (!available.has(id)) deliveryPrintSelection.delete(id);
+    });
+    const selectedCount = rowIds.filter(id => deliveryPrintSelection.has(id)).length;
+    const selectAll = document.getElementById('deliverySelectAll');
+    if (selectAll) {
+        selectAll.checked = rowIds.length > 0 && selectedCount === rowIds.length;
+        selectAll.indeterminate = selectedCount > 0 && selectedCount < rowIds.length;
+        selectAll.disabled = rowIds.length === 0;
+    }
+    const selectedButton = document.getElementById('btnPrintSelectedDelivery');
+    if (selectedButton) {
+        selectedButton.disabled = selectedCount === 0;
+        selectedButton.textContent = selectedCount > 0
+            ? `Распечатать выбранные (${selectedCount})`
+            : 'Распечатать выбранные';
+    }
+    const allButton = document.getElementById('btnPrintDelivery');
+    if (allButton) allButton.disabled = rowIds.length === 0;
+}
+
 function renderDelivery() {
     const rows = orders
         .filter(o => o.delivery_status === 'manual')
@@ -762,20 +794,23 @@ function renderDelivery() {
     const printDate = document.getElementById('deliveryPrintDate');
     if (printDate) printDate.textContent = new Date().toLocaleString('ru-RU', { dateStyle: 'long', timeStyle: 'short' });
     const printCount = document.getElementById('deliveryPrintCount');
-    if (printCount) printCount.textContent = `Заказов: ${rows.length}`;
-    const printButton = document.getElementById('btnPrintDelivery');
-    if (printButton) printButton.disabled = rows.length === 0;
+    if (printCount) printCount.textContent = deliveryPrintSummary(rows.length);
+    updateDeliveryPrintControls(rows);
 
     document.getElementById('deliveryBody').innerHTML = rows.length ? rows.map(o => {
         const c = calcOrder(o);
         const client = clients.find(x => x.id === o.client_id) || {};
         const label = o.order_number || crmId(o);
         return `<tr data-order="${o.id}" style="cursor:pointer">
+            <td class="delivery-select-col no-print" data-label="Выбрать">
+                <input class="delivery-select-checkbox" type="checkbox" data-order-id="${o.id}"
+                    aria-label="Выбрать заказ ${htmlSafe(label)} для печати"
+                    ${deliveryPrintSelection.has(o.id) ? 'checked' : ''}>
+            </td>
             <td class="td-bold" data-label="№ заказа">${htmlSafe(label)}</td>
             <td class="font-mono ${c.clientDebt > 0 ? 'text-red' : 'text-green'}" data-label="Осталось получить">${c.clientDebt > 0 ? fmtCur(c.clientDebt) : 'Оплачено'}</td>
             <td data-label="Телефон">${htmlSafe(client.phone || '—')}</td>
             <td data-label="Адрес">${htmlSafe(client.address || '—')}</td>
-            <td class="print-only" data-label="Состав заказа">${deliveryItemLines(o, 'is-print')}</td>
             <td data-label="" class="no-print row-actions delivery-actions">
                 <button class="btn btn-sm btn-delivery-items" onclick="event.stopPropagation();openDeliveryComposition(${o.id})">Состав</button>
                 <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();removeOrderFromDelivery(${o.id})">Убрать</button>
@@ -791,7 +826,7 @@ function renderDelivery() {
             const client = clients.find(x => x.id === o.client_id) || {};
             const label = o.order_number || crmId(o);
             const remaining = c.clientDebt > 0 ? fmtCur(c.clientDebt) : 'Оплачено';
-            return `<article class="delivery-print-card">
+            return `<article class="delivery-print-card" data-order-id="${o.id}">
                 <div class="delivery-print-card-head">
                     <div class="delivery-print-order-number">
                         <span>Заказ</span>
@@ -803,6 +838,10 @@ function renderDelivery() {
                     </div>
                 </div>
                 <div class="delivery-print-contacts">
+                    <div class="delivery-print-client">
+                        <span>Клиент</span>
+                        <strong>${htmlSafe(client.name || '—')}</strong>
+                    </div>
                     <div class="delivery-print-phone">
                         <span>Телефон</span>
                         <strong>${htmlSafe(client.phone || '—')}</strong>
@@ -816,12 +855,25 @@ function renderDelivery() {
                     <span>Состав заказа</span>
                     <div class="delivery-print-items">${deliveryItemLines(o, 'is-print-card')}</div>
                 </div>
+                <div class="delivery-print-signature">
+                    <span>Подпись клиента</span>
+                    <div class="delivery-print-signature-line"></div>
+                </div>
             </article>`;
         }).join('');
     }
 
     document.querySelectorAll('#deliveryBody tr[data-order]').forEach(tr => {
         tr.addEventListener('click', () => openOrderDetail(+tr.dataset.order));
+    });
+    document.querySelectorAll('.delivery-select-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('click', event => event.stopPropagation());
+        checkbox.addEventListener('change', event => {
+            const id = +event.target.dataset.orderId;
+            if (event.target.checked) deliveryPrintSelection.add(id);
+            else deliveryPrintSelection.delete(id);
+            updateDeliveryPrintControls(rows);
+        });
     });
 }
 
@@ -843,12 +895,14 @@ window.openDeliveryComposition = function(orderId) {
                 <div class="delivery-sheet-order">Заказ <b>${label}</b></div>
             </div>
             <div class="delivery-sheet-info">
-                <div><span>Осталось получить</span><b class="${c.clientDebt > 0 ? 'text-red' : 'text-green'}">${c.clientDebt > 0 ? fmtCur(c.clientDebt) : 'Оплачено'}</b></div>
+                <div><span>Клиент</span><b>${client.name || '—'}</b></div>
                 <div><span>Телефон</span><b>${client.phone || '—'}</b></div>
+                <div><span>Осталось получить</span><b class="${c.clientDebt > 0 ? 'text-red' : 'text-green'}">${c.clientDebt > 0 ? fmtCur(c.clientDebt) : 'Оплачено'}</b></div>
                 <div class="delivery-sheet-address"><span>Адрес</span><b>${client.address || '—'}</b></div>
             </div>
             <div class="detail-section-title">Состав заказа</div>
             <div class="delivery-sheet-items">${deliveryItemLines(o)}</div>
+            <div class="delivery-sheet-signature"><span>Подпись клиента</span><div></div></div>
             <div class="form-actions no-print">
                 <button class="btn btn-outline" onclick="closeModal()">Закрыть</button>
                 <button class="btn btn-primary" onclick="printDeliveryOrder(${o.id})">Распечатать этот заказ</button>
@@ -866,6 +920,12 @@ window.printDeliveryOrder = function(orderId) {
 
 window.addEventListener('afterprint', () => {
     document.body.classList.remove('print-delivery-order');
+    document.querySelectorAll('.delivery-print-card').forEach(card => {
+        card.classList.remove('print-excluded', 'print-page-break');
+    });
+    const count = orders.filter(o => o.delivery_status === 'manual').length;
+    const printCount = document.getElementById('deliveryPrintCount');
+    if (printCount) printCount.textContent = deliveryPrintSummary(count);
 });
 
 window.toggleOrderDelivery = async function(orderId) {
@@ -889,6 +949,7 @@ window.removeOrderFromDelivery = async function(orderId) {
     const ok = await sbUpdateOrder(o, { delivery_status: null });
     if (!ok) return;
     o.delivery_status = null;
+    deliveryPrintSelection.delete(orderId);
     renderDelivery();
     dbToast('Заказ убран из доставки', true);
 };
@@ -900,12 +961,30 @@ window.markOrderDelivered = async function(orderId) {
     if (!ok) return;
     o.delivery_status = 'delivered';
     o.status = 'delivered';
+    deliveryPrintSelection.delete(orderId);
     renderDelivery();
     dbToast('Заказ отмечен как доставленный', true);
 };
 
-window.printDeliverySheet = function() {
-    if (!orders.some(o => o.delivery_status === 'manual')) return;
+window.printDeliverySheet = function(mode = 'all') {
+    const rows = orders.filter(o => o.delivery_status === 'manual');
+    const ids = mode === 'selected'
+        ? new Set(rows.filter(o => deliveryPrintSelection.has(o.id)).map(o => o.id))
+        : new Set(rows.map(o => o.id));
+    if (!ids.size) return;
+    const includedCards = [];
+    document.querySelectorAll('.delivery-print-card').forEach(card => {
+        const included = ids.has(+card.dataset.orderId);
+        card.classList.toggle('print-excluded', !included);
+        card.classList.remove('print-page-break');
+        if (included) includedCards.push(card);
+    });
+    includedCards.forEach((card, index) => {
+        const isPageEnd = (index + 1) % DELIVERY_ORDERS_PER_PAGE === 0;
+        if (isPageEnd && index < includedCards.length - 1) card.classList.add('print-page-break');
+    });
+    const printCount = document.getElementById('deliveryPrintCount');
+    if (printCount) printCount.textContent = deliveryPrintSummary(ids.size);
     window.print();
 };
 
@@ -1168,7 +1247,14 @@ function renderOrders() {
 document.getElementById('filterStatus').addEventListener('change', renderOrders);
 document.getElementById('filterDateFrom').addEventListener('change', renderOrders);
 document.getElementById('filterDateTo').addEventListener('change', renderOrders);
-document.getElementById('btnPrintDelivery').addEventListener('click', printDeliverySheet);
+document.getElementById('btnPrintDelivery').addEventListener('click', () => printDeliverySheet('all'));
+document.getElementById('btnPrintSelectedDelivery').addEventListener('click', () => printDeliverySheet('selected'));
+document.getElementById('deliverySelectAll').addEventListener('change', event => {
+    const rows = orders.filter(o => o.delivery_status === 'manual');
+    if (event.target.checked) rows.forEach(o => deliveryPrintSelection.add(o.id));
+    else rows.forEach(o => deliveryPrintSelection.delete(o.id));
+    renderDelivery();
+});
 document.getElementById('ordersColumnsButton').addEventListener('click', openOrderColumnsSettings);
 
 
