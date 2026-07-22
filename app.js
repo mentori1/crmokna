@@ -1221,7 +1221,7 @@ function orderColumnCell(key, o, c, supplierNames) {
             return `<td class="col-actions" data-label="">
                 <div class="order-row-actions">
                     <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openOrderDetail(${o.id})">Открыть</button>
-                    <label class="order-manager-badge ${orderManagerClass(o.manager_key)}"
+                    ${window.ordersManagerView === 'all' ? `<label class="order-manager-badge ${orderManagerClass(o.manager_key)}"
                         title="Оформил: ${orderManagerLabel(o.manager_key)}. Нажмите, чтобы изменить"
                         onclick="event.stopPropagation()">
                         <span aria-hidden="true">${orderManagerInitial(o.manager_key)}</span>
@@ -1229,7 +1229,7 @@ function orderColumnCell(key, o, c, supplierNames) {
                             onchange="changeOrderManagerQuick(${o.id}, this.value, this);event.stopPropagation()">
                             ${orderManagerOptions(o.manager_key)}
                         </select>
-                    </label>
+                    </label>` : ''}
                 </div>
             </td>`;
         default:
@@ -1243,6 +1243,15 @@ window.changeOrderManagerQuick = async function(orderId, value, selectEl) {
     const next = value || null;
     const previous = o.manager_key || null;
     if (next === previous) return;
+    const orderLabel = o.order_number || crmId(o);
+    const confirmed = window.confirm(
+        `Вы уверены, что хотите изменить менеджера в заказе ${orderLabel}\n` +
+        `с «${orderManagerLabel(previous)}» на «${orderManagerLabel(next)}»?`
+    );
+    if (!confirmed) {
+        if (selectEl) selectEl.value = previous || '';
+        return;
+    }
     if (selectEl) selectEl.disabled = true;
     const ok = await sbUpdateOrder(o, { manager_key: next });
     if (!ok) {
