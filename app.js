@@ -435,6 +435,7 @@ const todayLocalDate = () => {
 const clientLabel = cl => (cl && ((cl.name || '').trim() || (cl.address || '').trim())) || 'Без имени';
 const clientName = id => { const c = clients.find(x => x.id === id); return c ? clientLabel(c) : '—'; };
 const clientPhone = id => (clients.find(c => c.id === id) || {}).phone || '';
+const clientAddress = id => (clients.find(c => c.id === id) || {}).address || '';
 const supplierName = id => (suppliers.find(s => s.id === id) || {}).name || '—';
 const categoryName = id => (categories.find(c => c.id === id) || {}).name || '—';
 
@@ -1027,8 +1028,12 @@ window.addEventListener('afterprint', () => {
 
 window.toggleOrderDelivery = async function(orderId) {
     const o = orders.find(x => x.id === orderId);
-    if (!o || o.delivery_status === 'delivered' || o.status === 'delivered') return;
+    if (!o || o.delivery_status === 'delivered' || o.status === 'delivered' || o.delivery_status === 'not_required') return;
     const inDelivery = o.delivery_status === 'manual';
+    if (!inDelivery && !clientAddress(o.client_id).trim()) {
+        dbToast('Сначала укажите адрес доставки в заказе', false);
+        return;
+    }
     const nextStatus = inDelivery ? null : 'manual';
     const ok = await sbUpdateOrder(o, { delivery_status: nextStatus });
     if (!ok) return;
@@ -1202,6 +1207,16 @@ function orderColumnCell(key, o, c, supplierNames) {
             if (o.delivery_status === 'delivered' || o.status === 'delivered') {
                 return `<td class="col-delivery" data-label="Доставка">
                     <span class="delivery-state-delivered">✓ Доставлен</span>
+                </td>`;
+            }
+            if (o.delivery_status === 'not_required') {
+                return `<td class="col-delivery" data-label="Доставка">
+                    <span class="delivery-state-not-required">Самовывоз</span>
+                </td>`;
+            }
+            if (!clientAddress(o.client_id).trim()) {
+                return `<td class="col-delivery" data-label="Доставка">
+                    <span class="delivery-state-address-missing" title="Добавьте адрес в карточке заказа">Нет адреса</span>
                 </td>`;
             }
             const inDelivery = o.delivery_status === 'manual';
@@ -1441,6 +1456,9 @@ function openOrderDetail(orderId) {
                     <div><span>Дата</span><b>${fmtDate(o.created_at)}</b></div>
                     <div><span>Клиент</span><b>${htmlSafe(client.name || '—')}</b></div>
                     <div><span>Телефон</span><b>${htmlSafe(client.phone || '—')}</b></div>
+                    <div class="order-summary-address"><span>Получение заказа</span><b>${o.delivery_status === 'not_required'
+                        ? 'Самовывоз — доставка не требуется'
+                        : htmlSafe(client.address || 'Адрес не указан')}</b></div>
                     <div><span>Заказ оформил</span><b class="${o.manager_key ? '' : 'text-muted'}">${orderManagerLabel(o.manager_key)}</b></div>
                     <div class="order-summary-suppliers"><span>Поставщик(и)</span><b>${htmlSafe(supplierIds.map(supplierName).join(', ') || '—')}</b></div>
                 </div>
@@ -1577,11 +1595,22 @@ window.openOrderEditForm = function(orderId) {
             </div>
             <div class="form-group">
                 <label>Дата доставки</label>
-                <input type="date" id="editDeliveryDate" value="${o.delivery_date || ''}">
+                <input type="date" id="editDeliveryDate" value="${o.delivery_date || ''}" ${o.delivery_status === 'not_required' ? 'disabled' : ''}>
             </div>
             <div class="form-group">
                 <label>Заказ оформил</label>
                 <select id="editManagerKey">${orderManagerOptions(o.manager_key)}</select>
+            </div>
+            <div class="form-group full delivery-address-group ${o.delivery_status === 'not_required' ? 'is-disabled' : ''}" id="editDeliveryAddressGroup">
+                <label>Адрес доставки</label>
+                <input type="text" id="editDeliveryAddr" class="addr-suggest"
+                    value="${htmlSafe(client.address || '')}"
+                    placeholder="Начните вводить адрес…" autocomplete="off" ${o.delivery_status === 'not_required' ? 'disabled' : ''}>
+                <label class="delivery-not-required-option">
+                    <input type="checkbox" id="editDeliveryNotRequired" ${o.delivery_status === 'not_required' ? 'checked' : ''}
+                        onchange="toggleOrderDeliveryRequirement('edit')">
+                    <span><b>Доставка не потребуется</b><small>Клиент заберёт заказ самостоятельно из офиса</small></span>
+                </label>
             </div>
         </div>
 
@@ -1606,6 +1635,7 @@ window.openOrderEditForm = function(orderId) {
             </div>
         </div>
 
+        <div class="form-validation-message" id="editOrderValidation" role="alert"></div>
         <div class="form-actions">
             <button class="btn btn-outline" onclick="openOrderDetail(${o.id})">Отмена</button>
             <button class="btn btn-primary" onclick="saveOrderEdit(${o.id})">Сохранить</button>
@@ -1613,12 +1643,50 @@ window.openOrderEditForm = function(orderId) {
     `);
 };
 
+window.toggleOrderDeliveryRequirement = function(prefix) {
+    const noDelivery = document.getElementById(`${prefix}DeliveryNotRequired`)?.checked || false;
+    const address = document.getElementById(`${prefix}DeliveryAddr`);
+    const date = document.getElementById(`${prefix}DeliveryDate`);
+    const group = document.getElementById(`${prefix}DeliveryAddressGroup`);
+    if (address) {
+        address.disabled = noDelivery;
+        address.removeAttribute('aria-invalid');
+    }
+    if (date) date.disabled = noDelivery;
+    if (group) group.classList.toggle('is-disabled', noDelivery);
+    const message = document.getElementById(`${prefix}OrderValidation`);
+    if (message) { message.textContent = ''; message.classList.remove('show'); }
+};
+
+function getOrderDeliveryChoice(prefix) {
+    const addressEl = document.getElementById(`${prefix}DeliveryAddr`);
+    const noDelivery = document.getElementById(`${prefix}DeliveryNotRequired`)?.checked || false;
+    const address = addressEl?.value.trim() || '';
+    const message = document.getElementById(`${prefix}OrderValidation`);
+    if (!noDelivery && !address) {
+        if (message) {
+            message.textContent = 'Не заполнен адрес доставки. Укажите адрес или отметьте «Доставка не потребуется».';
+            message.classList.add('show');
+        }
+        if (addressEl) {
+            addressEl.setAttribute('aria-invalid', 'true');
+            addressEl.focus();
+        }
+        return null;
+    }
+    if (message) { message.textContent = ''; message.classList.remove('show'); }
+    if (addressEl) addressEl.removeAttribute('aria-invalid');
+    return { noDelivery, address, addressData: noDelivery ? null : addrDataFrom(addressEl) };
+}
+
 window.saveOrderEdit = function(orderId) {
     const o = orders.find(x => x.id === orderId);
     if (!o) return;
     const name = document.getElementById('editClientName').value.trim();
     const phone = document.getElementById('editClientPhone').value.trim();
     if (!name) { alert('Укажите ФИО клиента'); return; }
+    const deliveryChoice = getOrderDeliveryChoice('edit');
+    if (!deliveryChoice) return;
 
     const supplierId = findOrCreateSupplier(document.getElementById('editSupplier').value.trim());
 
@@ -1638,13 +1706,28 @@ window.saveOrderEdit = function(orderId) {
     });
     if (!items.length) { alert('Добавьте хотя бы одну позицию'); return; }
 
-    o.client_id = findOrCreateClient(name, phone);
-    // обновим телефон клиента, если изменили
+    o.client_id = findOrCreateClient(
+        name,
+        phone,
+        deliveryChoice.noDelivery ? '' : deliveryChoice.address,
+        deliveryChoice.addressData,
+    );
+    // Обновим контакты и адрес клиента, если они изменились.
     const cl = clients.find(c => c.id === o.client_id);
-    if (cl && phone) { cl.phone = phone; sbUpdateClient(cl, { phone }); }
+    if (cl) {
+        const clientPatch = {};
+        if (phone && phone !== cl.phone) clientPatch.phone = phone;
+        if (!deliveryChoice.noDelivery && deliveryChoice.address !== (cl.address || '')) {
+            clientPatch.address = deliveryChoice.address;
+            clientPatch.address_data = deliveryChoice.addressData;
+        }
+        if (Object.keys(clientPatch).length) { Object.assign(cl, clientPatch); sbUpdateClient(cl, clientPatch); }
+    }
     o.items = items;
     o.created_at = document.getElementById('editCreatedDate').value || o.created_at;
-    o.delivery_date = document.getElementById('editDeliveryDate').value || null;
+    o.delivery_date = deliveryChoice.noDelivery ? null : (document.getElementById('editDeliveryDate').value || null);
+    if (deliveryChoice.noDelivery) o.delivery_status = 'not_required';
+    else if (o.delivery_status === 'not_required') o.delivery_status = null;
     o.manager_key = document.getElementById('editManagerKey').value || null;
     o.notes = document.getElementById('editNotes').value.trim();
     o.order_number = document.getElementById('editOrderNumber').value.trim();
@@ -1652,7 +1735,8 @@ window.saveOrderEdit = function(orderId) {
     // Сохраняем изменения заказа и его позиции в серверную БД
     sbUpdateOrder(o, {
         client_id: o.client_id, created_at: o.created_at, order_number: o.order_number,
-        delivery_date: o.delivery_date, manager_key: o.manager_key, notes: o.notes,
+        delivery_date: o.delivery_date, delivery_status: o.delivery_status,
+        manager_key: o.manager_key, notes: o.notes,
     });
     sbReplaceItems(o.id, items);
 
@@ -2928,9 +3012,13 @@ function openNewOrderForm() {
                 <label>Заказ оформил</label>
                 ${managerField}
             </div>
-            <div class="form-group full">
+            <div class="form-group full delivery-address-group" id="formDeliveryAddressGroup">
                 <label>Адрес доставки</label>
                 <input type="text" id="formDeliveryAddr" class="addr-suggest" placeholder="Начните вводить адрес…" autocomplete="off">
+                <label class="delivery-not-required-option">
+                    <input type="checkbox" id="formDeliveryNotRequired" onchange="toggleOrderDeliveryRequirement('form')">
+                    <span><b>Доставка не потребуется</b><small>Клиент заберёт заказ самостоятельно из офиса</small></span>
+                </label>
             </div>
         </div>
 
@@ -2956,6 +3044,7 @@ function openNewOrderForm() {
             </div>
         </div>
 
+        <div class="form-validation-message" id="formOrderValidation" role="alert"></div>
         <div class="form-actions">
             <button class="btn btn-outline" onclick="closeModal()">Отмена</button>
             <button class="btn btn-primary" onclick="saveNewOrder()">Создать заказ</button>
@@ -2997,11 +3086,13 @@ function findOrCreateClient(name, phone, address, addressData) {
         cl = clients.find(c => c.name.trim().toLowerCase() === norm);
     }
     if (cl) {
-        // Дозаполняем телефон/адрес у существующего клиента, если их ещё не было
+        // Дозаполняем контакты и сохраняем актуальный адрес из нового заказа.
         const patch = {};
         if (phone && !cl.phone) patch.phone = phone;
-        if (address && !cl.address) patch.address = address;
-        if (addressData && !cl.address_data) patch.address_data = addressData;
+        if (address && address !== (cl.address || '')) {
+            patch.address = address;
+            patch.address_data = addressData || null;
+        } else if (addressData && !cl.address_data) patch.address_data = addressData;
         if (Object.keys(patch).length) { Object.assign(cl, patch); sbUpdateClient(cl, patch); }
         return cl.id;
     }
@@ -3032,6 +3123,8 @@ window.saveNewOrder = function() {
     const managerKey = document.getElementById('formManagerKey').value;
     if (!clientName) { alert('Укажите ФИО клиента'); return; }
     if (!ORDER_MANAGER_LABELS[managerKey]) { alert('Выберите, кто оформил заказ: Саша или Оля'); return; }
+    const deliveryChoice = getOrderDeliveryChoice('form');
+    if (!deliveryChoice) return;
 
     const supplierName = document.getElementById('formSupplier').value.trim();
     const supplierId = findOrCreateSupplier(supplierName);
@@ -3050,11 +3143,14 @@ window.saveNewOrder = function() {
     });
     if (!items.length) { alert('Добавьте хотя бы одну позицию продукции'); return; }
 
-    const addrEl = document.getElementById('formDeliveryAddr');
-    const clientAddress = addrEl.value.trim();
-    const clientId = findOrCreateClient(clientName, clientPhone, clientAddress, addrDataFrom(addrEl));
+    const clientId = findOrCreateClient(
+        clientName,
+        clientPhone,
+        deliveryChoice.noDelivery ? '' : deliveryChoice.address,
+        deliveryChoice.addressData,
+    );
     const newId = nextLocalOrderId();
-    const deliveryDate = document.getElementById('formDeliveryDate').value || null;
+    const deliveryDate = deliveryChoice.noDelivery ? null : (document.getElementById('formDeliveryDate').value || null);
 
     const newOrder = {
         id: newId,
@@ -3064,7 +3160,7 @@ window.saveNewOrder = function() {
         client_id: clientId,
         status: 'new',
         manager_key: managerKey,
-        delivery_status: null,
+        delivery_status: deliveryChoice.noDelivery ? 'not_required' : null,
         created_at: document.getElementById('formCreatedDate').value || new Date().toISOString().slice(0, 10),
         delivery_date: deliveryDate,
         notes: document.getElementById('formNotes').value.trim(),
@@ -3147,6 +3243,14 @@ document.addEventListener('input', e => {
 document.addEventListener('click', e => {
     const box = document.getElementById('addrSuggestBox');
     if (box && !e.target.closest('.addr-suggest') && !e.target.closest('#addrSuggestBox')) box.style.display = 'none';
+});
+document.addEventListener('input', e => {
+    if (e.target?.id !== 'formDeliveryAddr' && e.target?.id !== 'editDeliveryAddr') return;
+    if (!e.target.value.trim()) return;
+    e.target.removeAttribute('aria-invalid');
+    const prefix = e.target.id.startsWith('edit') ? 'edit' : 'form';
+    const message = document.getElementById(`${prefix}OrderValidation`);
+    if (message) { message.textContent = ''; message.classList.remove('show'); }
 });
 // Компактная структура адреса из ответа DaData (для хранения в address_data)
 function addrDataFrom(input) {

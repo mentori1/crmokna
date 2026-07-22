@@ -517,6 +517,18 @@ body.modal-open { overflow: hidden; }
     border: 1px solid var(--green-100); font-size: 12px; font-weight: 700;
     white-space: nowrap;
 }
+.delivery-state-not-required,
+.delivery-state-address-missing {
+    display: inline-flex; align-items: center; min-height: 26px;
+    padding: 4px 9px; border-radius: 999px;
+    font-size: 12px; font-weight: 700; white-space: nowrap;
+}
+.delivery-state-not-required {
+    color: var(--slate-600); background: var(--slate-100); border: 1px solid var(--slate-200);
+}
+.delivery-state-address-missing {
+    color: #b45309; background: #fffbeb; border: 1px solid #fde68a;
+}
 
 /* Две кнопки в ячейке действий (Карточка + Удалить) */
 .row-actions { display: flex; gap: 6px; white-space: nowrap; }
@@ -920,6 +932,32 @@ body.modal-open { overflow: hidden; }
     box-shadow: 0 0 0 3px rgba(59,130,246,.12);
 }
 .form-group textarea { resize: vertical; min-height: 60px; }
+.delivery-address-group { gap: 7px; }
+.delivery-address-group.is-disabled > input[type="text"] {
+    color: var(--slate-400); background: var(--slate-100); cursor: not-allowed;
+}
+.form-group .delivery-not-required-option {
+    display: flex; align-items: flex-start; gap: 9px; padding: 9px 11px;
+    border: 1px solid var(--slate-200); border-radius: 7px;
+    color: var(--slate-700); background: var(--slate-50);
+    text-transform: none; letter-spacing: 0; cursor: pointer;
+}
+.form-group .delivery-not-required-option input[type="checkbox"] {
+    width: 17px; min-width: 17px; height: 17px; margin: 1px 0 0; padding: 0;
+}
+.delivery-not-required-option span { display: flex; flex-direction: column; gap: 1px; }
+.delivery-not-required-option b { font-size: 12px; }
+.delivery-not-required-option small { color: var(--slate-500); font-size: 11px; font-weight: 400; }
+.form-group input[aria-invalid="true"] {
+    border-color: var(--red-500); box-shadow: 0 0 0 3px rgba(239,68,68,.12);
+}
+.form-validation-message {
+    display: none; margin-top: 14px; padding: 10px 12px;
+    border: 1px solid #fecaca; border-radius: 7px;
+    color: #b91c1c; background: #fef2f2; font-size: 13px; font-weight: 600;
+}
+.form-validation-message.show { display: block; }
+.form-validation-message.show + .form-actions { margin-top: 8px; }
 
 .form-actions {
     display: flex; justify-content: flex-end;
