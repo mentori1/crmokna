@@ -323,6 +323,19 @@ const STATUS_COMPAT = {
 };
 const statusLabel = s => STATUS_LABELS[s] || STATUS_COMPAT[s] || s || '—';
 
+// Менеджер, который фактически оформил заказ. Это отдельное бизнес-поле:
+// created_by/updated_by содержат техническую учётную запись CRM.
+const ORDER_MANAGER_LABELS = {
+    sasha: 'Саша',
+    olya: 'Оля',
+};
+const orderManagerLabel = key => ORDER_MANAGER_LABELS[key] || 'Не указано';
+const orderManagerOptions = (selected = '', includeBlank = true) =>
+    `${includeBlank ? `<option value="" ${selected ? '' : 'selected'}>Не указано</option>` : '<option value="">Выберите сотрудника</option>'}` +
+    Object.entries(ORDER_MANAGER_LABELS)
+        .map(([key, label]) => `<option value="${key}" ${selected === key ? 'selected' : ''}>${label}</option>`)
+        .join('');
+
 let clients = [];
 
 let suppliers = [];
@@ -1190,6 +1203,7 @@ window.saveOrderColumnsSettings = async function() {
 function renderOrders() {
     renderMonthTabs();
     const status = document.getElementById('filterStatus').value;
+    const manager = document.getElementById('filterManager').value;
     const dateFrom = document.getElementById('filterDateFrom').value;
     const dateTo = document.getElementById('filterDateTo').value;
     const month = window.ordersMonth;
@@ -1197,6 +1211,8 @@ function renderOrders() {
     let filtered = orders;
     if (month && month !== 'all') filtered = filtered.filter(o => (o.created_at || '').startsWith(month));
     if (status) filtered = filtered.filter(o => o.status === status);
+    if (manager === 'unassigned') filtered = filtered.filter(o => !o.manager_key);
+    else if (manager) filtered = filtered.filter(o => o.manager_key === manager);
     if (dateFrom) filtered = filtered.filter(o => o.created_at >= dateFrom);
     if (dateTo) filtered = filtered.filter(o => o.created_at <= dateTo);
 
@@ -1248,12 +1264,13 @@ function renderOrders() {
     });
 }
 // Сбрасываем страницу при изменении фильтров
-['filterStatus','filterDateFrom','filterDateTo'].forEach(id => {
+['filterStatus','filterManager','filterDateFrom','filterDateTo'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', () => { window.ordersPage = 1; });
 });
 
 document.getElementById('filterStatus').addEventListener('change', renderOrders);
+document.getElementById('filterManager').addEventListener('change', renderOrders);
 document.getElementById('filterDateFrom').addEventListener('change', renderOrders);
 document.getElementById('filterDateTo').addEventListener('change', renderOrders);
 document.getElementById('btnPrintDelivery').addEventListener('click', () => printDeliverySheet('all'));
@@ -1291,6 +1308,7 @@ function openOrderDetail(orderId) {
                     <div><span>Дата</span><b>${fmtDate(o.created_at)}</b></div>
                     <div><span>Клиент</span><b>${htmlSafe(client.name || '—')}</b></div>
                     <div><span>Телефон</span><b>${htmlSafe(client.phone || '—')}</b></div>
+                    <div><span>Заказ оформил</span><b class="${o.manager_key ? '' : 'text-muted'}">${orderManagerLabel(o.manager_key)}</b></div>
                     <div class="order-summary-suppliers"><span>Поставщик(и)</span><b>${htmlSafe(supplierIds.map(supplierName).join(', ') || '—')}</b></div>
                 </div>
 
@@ -1428,6 +1446,10 @@ window.openOrderEditForm = function(orderId) {
                 <label>Дата доставки</label>
                 <input type="date" id="editDeliveryDate" value="${o.delivery_date || ''}">
             </div>
+            <div class="form-group">
+                <label>Заказ оформил</label>
+                <select id="editManagerKey">${orderManagerOptions(o.manager_key)}</select>
+            </div>
         </div>
 
         <div class="detail-section-title">Продукция</div>
@@ -1490,13 +1512,14 @@ window.saveOrderEdit = function(orderId) {
     o.items = items;
     o.created_at = document.getElementById('editCreatedDate').value || o.created_at;
     o.delivery_date = document.getElementById('editDeliveryDate').value || null;
+    o.manager_key = document.getElementById('editManagerKey').value || null;
     o.notes = document.getElementById('editNotes').value.trim();
     o.order_number = document.getElementById('editOrderNumber').value.trim();
 
     // Сохраняем изменения заказа и его позиции в серверную БД
     sbUpdateOrder(o, {
         client_id: o.client_id, created_at: o.created_at, order_number: o.order_number,
-        delivery_date: o.delivery_date, notes: o.notes,
+        delivery_date: o.delivery_date, manager_key: o.manager_key, notes: o.notes,
     });
     sbReplaceItems(o.id, items);
 
@@ -2759,6 +2782,10 @@ function openNewOrderForm() {
                 <label>Дата доставки</label>
                 <input type="date" id="formDeliveryDate">
             </div>
+            <div class="form-group">
+                <label>Заказ оформил</label>
+                <select id="formManagerKey" required>${orderManagerOptions('', false)}</select>
+            </div>
             <div class="form-group full">
                 <label>Адрес доставки</label>
                 <input type="text" id="formDeliveryAddr" class="addr-suggest" placeholder="Начните вводить адрес…" autocomplete="off">
@@ -2860,7 +2887,9 @@ function findOrCreateSupplier(name) {
 window.saveNewOrder = function() {
     const clientName = document.getElementById('formClientName').value.trim();
     const clientPhone = document.getElementById('formClientPhone').value.trim();
+    const managerKey = document.getElementById('formManagerKey').value;
     if (!clientName) { alert('Укажите ФИО клиента'); return; }
+    if (!ORDER_MANAGER_LABELS[managerKey]) { alert('Выберите, кто оформил заказ: Саша или Оля'); return; }
 
     const supplierName = document.getElementById('formSupplier').value.trim();
     const supplierId = findOrCreateSupplier(supplierName);
@@ -2892,6 +2921,7 @@ window.saveNewOrder = function() {
         order_number: (document.getElementById('formProdNumber')?.value || '').trim(),
         client_id: clientId,
         status: 'new',
+        manager_key: managerKey,
         delivery_status: null,
         created_at: document.getElementById('formCreatedDate').value || new Date().toISOString().slice(0, 10),
         delivery_date: deliveryDate,

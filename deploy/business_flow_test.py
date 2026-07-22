@@ -41,11 +41,13 @@ def main():
     suppliers = call('/api/query', {'table':'suppliers','action':'select','limit':1})['data']
     client_id, supplier_id = clients[0]['id'], suppliers[0]['id']
 
-    requested_id = 900000000003
+    # Уникальный высокий ID делает тест повторяемым: удаление заказа мягкое,
+    # поэтому прежний фиксированный ID после первого запуска оставался занят.
+    requested_id = 900_000_000_000 + (uuid.uuid4().int % 99_000_000_000)
     order_key = str(uuid.uuid4())
     order_id = call('/api/rpc/create_order', {'order': {
         'id': requested_id, 'order_number':'BUSINESS-FLOW-TEST', 'client_id':client_id,
-        'status':'new', 'created_at':'2026-07-13', 'settled':False,
+        'status':'new', 'manager_key':'olya', 'created_at':'2026-07-13', 'settled':False,
         'idempotency_key':order_key,
     }, 'items':[{
         'product_name':'Проверка финансовой цепочки', 'supplier_id':supplier_id,
@@ -56,7 +58,15 @@ def main():
     order = call('/api/query', {'table':'orders','action':'select','filters':[{'column':'id','op':'eq','value':order_id}], 'nested_items':True})['data'][0]
     assert order['order_items'][0]['purchase_price'] == 3000
     assert order['order_items'][0]['sale_price'] == 10000
+    assert order['manager_key'] == 'olya'
     print('order_totals: revenue=10000 margin=7000 client_debt=10000 supplier_debt=3000')
+
+    reassigned = call('/api/query', {'table':'orders','action':'update','filters':[
+        {'column':'id','op':'eq','value':order_id},{'column':'version','op':'eq','value':order['version']}],
+        'values':{'manager_key':'sasha'}})['data']
+    assert reassigned['manager_key'] == 'sasha'
+    order['version'] = reassigned['version']
+    print('order_manager_assignment: create=olya edit=sasha')
 
     delivery = call('/api/query', {'table':'orders','action':'update','filters':[
         {'column':'id','op':'eq','value':order_id},{'column':'version','op':'eq','value':order['version']}],

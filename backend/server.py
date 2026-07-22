@@ -325,6 +325,8 @@ class Handler(BaseHTTPRequestHandler):
                                 if existing:
                                     created.append(row_dict(existing))
                                     continue
+                        if table == "orders":
+                            self.validate_order_manager(clean, required=True)
                         if table in {"clients", "suppliers", "transactions", "salary_payments"} and clean.get("id") is not None:
                             occupied = conn.execute(f"select 1 from {table} where id=?", (clean["id"],)).fetchone()
                             if occupied:
@@ -350,6 +352,10 @@ class Handler(BaseHTTPRequestHandler):
                         merged = row_dict(old)
                         merged.update(clean)
                         self.validate_salary_payment(merged)
+                    if table == "orders":
+                        merged = row_dict(old)
+                        merged.update(clean)
+                        self.validate_order_manager(merged)
                     if "version" in old.keys():
                         clean["version"] = old["version"] + 1
                         clean["updated_at"] = now()
@@ -439,6 +445,14 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             raise ValueError("Некорректная дата выплаты")
 
+    @staticmethod
+    def validate_order_manager(order, required=False):
+        manager_key = order.get("manager_key")
+        if required and manager_key not in {"sasha", "olya"}:
+            raise ValueError("Выберите, кто оформил заказ: Саша или Оля")
+        if manager_key not in {None, "sasha", "olya"}:
+            raise ValueError("Неизвестный сотрудник, оформивший заказ")
+
     def create_order(self, req, user):
         order = dict(req.get("order") or {})
         items = req.get("items") or []
@@ -451,6 +465,7 @@ class Handler(BaseHTTPRequestHandler):
                     if existing:
                         return self.send_json(200, {"data": existing["id"]})
                 clean = self.clean_row(conn, "orders", order, True, user["id"])
+                self.validate_order_manager(clean, required=True)
                 if conn.execute("select 1 from orders where id=?", (clean.get("id"),)).fetchone():
                     clean["id"] = conn.execute("select coalesce(max(id),0)+1 from orders").fetchone()[0]
                 cols = list(clean)
