@@ -1154,10 +1154,23 @@ const ORDER_COLUMN_DEFAULTS = [
     { key: 'actions',   label: 'Кнопка «Открыть»', head: '' },
 ];
 const ORDER_COLUMN_MAP = Object.fromEntries(ORDER_COLUMN_DEFAULTS.map(c => [c.key, c]));
+const ORDER_COLUMNS_DEVICE_KEY = 'orders_columns_device_v1';
+
+function readDeviceOrderColumns() {
+    try {
+        const value = JSON.parse(localStorage.getItem(ORDER_COLUMNS_DEVICE_KEY) || 'null');
+        return value && typeof value === 'object' ? value : null;
+    } catch (e) {
+        console.warn('Не удалось прочитать настройки столбцов устройства', e);
+        return null;
+    }
+}
 
 function getOrderColumnsConfig() {
     const fallback = { order: ORDER_COLUMN_DEFAULTS.map(c => c.key), hidden: [] };
-    const saved = appSettingValue('orders_columns', fallback);
+    // Настройка принадлежит конкретному браузеру/устройству. Серверное значение
+    // используем только как начальную конфигурацию для старых установок CRM.
+    const saved = readDeviceOrderColumns() || appSettingValue('orders_columns', fallback);
     const order = [];
     (Array.isArray(saved.order) ? saved.order : []).forEach(key => {
         if (ORDER_COLUMN_MAP[key] && !order.includes(key)) order.push(key);
@@ -1264,7 +1277,7 @@ window.openOrderColumnsSettings = function() {
     const current = getOrderColumnsConfig();
     orderColumnsDraft = { order: [...current.order], hidden: [...current.hidden] };
     openModal('Столбцы заказов', `
-        <p class="text-muted" style="margin:0 0 14px">Галочка показывает столбец, стрелки меняют его место. Настройка общая для всех пользователей CRM.</p>
+        <p class="text-muted" style="margin:0 0 14px">Галочка показывает столбец, стрелки меняют его место. Настройка сохранится только на этом устройстве.</p>
         <div class="order-columns-list" id="orderColumnsList"></div>
         <div class="form-actions">
             <button class="btn btn-outline" onclick="resetOrderColumnsDraft()">Сбросить</button>
@@ -1294,14 +1307,20 @@ window.resetOrderColumnsDraft = function() {
     renderOrderColumnsEditor();
 };
 
-window.saveOrderColumnsSettings = async function() {
+window.saveOrderColumnsSettings = function() {
     if (!orderColumnsDraft) return;
     if (orderColumnsDraft.hidden.length === orderColumnsDraft.order.length) {
         dbToast('Оставьте хотя бы один столбец', false);
         return;
     }
     const value = { order: [...orderColumnsDraft.order], hidden: [...orderColumnsDraft.hidden] };
-    if (!await saveAppSetting('orders_columns', value, 'настройка столбцов')) return;
+    try {
+        localStorage.setItem(ORDER_COLUMNS_DEVICE_KEY, JSON.stringify(value));
+    } catch (e) {
+        console.error('Не удалось сохранить настройки столбцов устройства', e);
+        dbToast('Не удалось сохранить столбцы на устройстве', false);
+        return;
+    }
     closeModal();
     renderOrders();
     dbToast('Столбцы сохранены', true);
