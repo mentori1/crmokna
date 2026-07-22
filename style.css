@@ -665,20 +665,49 @@ body.modal-open { overflow: hidden; }
 /* Заказы: пропорциональная раскладка использует всю ширину без пустого провала */
 #ordersTable { table-layout: fixed; width: 100%; min-width: 1000px; }
 #ordersTable th, #ordersTable td { padding-left: 9px; padding-right: 9px; }
+#ordersTable th { padding-left: 7px; padding-right: 7px; }
 #ordersTable .col-date      { width: 7%; white-space: nowrap; }
-#ordersTable .col-number    { width: 8%; word-break: break-word; }
-#ordersTable .col-supplier  { width: 9%; word-break: break-word; }
+#ordersTable .col-number    { width: 9%; word-break: break-word; }
+#ordersTable .col-number .text-muted { white-space: nowrap; }
+#ordersTable .col-supplier  { width: 8%; word-break: break-word; }
 #ordersTable .col-purchase  { width: 7%; }
 #ordersTable .col-sale      { width: 7%; }
 #ordersTable .col-received  { width: 8%; }
 #ordersTable .col-remaining { width: 7%; }
-#ordersTable .col-delivery  { width: 10%; }
-#ordersTable .col-client    { width: 16%; word-break: break-word; }
-#ordersTable .col-phone     { width: 12%; white-space: nowrap; }
-#ordersTable .col-actions   { width: 9%; white-space: nowrap; padding-right: 12px; }
+#ordersTable .col-delivery  { width: 9%; }
+#ordersTable .col-client    { width: 14%; word-break: break-word; }
+#ordersTable .col-phone     { width: 13%; white-space: nowrap; }
+#ordersTable .col-actions   { width: 11%; white-space: nowrap; padding-right: 12px; }
 #ordersTable .col-client,
 #ordersTable .col-phone {
     border-left: 1px solid var(--slate-200);
+}
+.order-row-actions {
+    display: flex; align-items: center; justify-content: flex-end; gap: 7px;
+}
+.order-row-actions .btn { padding-left: 6px; padding-right: 6px; }
+#ordersTable td.col-phone { font-size: 12px; }
+.order-manager-badge {
+    position: relative; flex: 0 0 28px; width: 28px; height: 28px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid transparent; border-radius: 50%;
+    font-size: 12px; font-weight: 800; line-height: 1;
+    cursor: pointer; transition: transform .15s ease, box-shadow .15s ease;
+}
+.order-manager-badge:hover { transform: translateY(-1px); }
+.order-manager-badge:focus-within { box-shadow: 0 0 0 3px rgba(59,130,246,.18); }
+.order-manager-badge.is-sasha {
+    color: #1d4ed8; background: #dbeafe; border-color: #93c5fd;
+}
+.order-manager-badge.is-olya {
+    color: #7e22ce; background: #f3e8ff; border-color: #d8b4fe;
+}
+.order-manager-badge.is-unassigned {
+    color: var(--slate-500); background: var(--slate-100); border-color: var(--slate-300);
+}
+.order-manager-badge select {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    opacity: 0; cursor: pointer; border: 0; border-radius: 50%;
 }
 .orders-toolbar {
     display: flex; justify-content: space-between; align-items: center;
@@ -1265,6 +1294,7 @@ body.modal-open { overflow: hidden; }
     .data-table tbody td[data-label=""] { padding-top: 10px; }
     .data-table tbody td[data-label=""]::before { display: none; }
     .data-table tbody td[data-label=""] .btn { width: 100%; }
+    .data-table tbody td[data-label=""] .order-row-actions { width: 100%; }
     /* Несколько кнопок действий на мобиле — в столбик во всю ширину */
     .data-table tbody td.row-actions { flex-direction: column; gap: 8px; align-items: stretch; }
     /* Пустые ячейки (например пустой приход/расход) — скрываем */

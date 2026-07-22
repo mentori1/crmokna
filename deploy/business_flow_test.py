@@ -41,19 +41,16 @@ def main():
     suppliers = call('/api/query', {'table':'suppliers','action':'select','limit':1})['data']
     client_id, supplier_id = clients[0]['id'], suppliers[0]['id']
 
-    # Уникальный высокий ID делает тест повторяемым: удаление заказа мягкое,
-    # поэтому прежний фиксированный ID после первого запуска оставался занят.
-    requested_id = 900_000_000_000 + (uuid.uuid4().int % 99_000_000_000)
     order_key = str(uuid.uuid4())
     order_id = call('/api/rpc/create_order', {'order': {
-        'id': requested_id, 'order_number':'BUSINESS-FLOW-TEST', 'client_id':client_id,
+        'order_number':'BUSINESS-FLOW-TEST', 'client_id':client_id,
         'status':'new', 'manager_key':'olya', 'created_at':'2026-07-13', 'settled':False,
         'idempotency_key':order_key,
     }, 'items':[{
         'product_name':'Проверка финансовой цепочки', 'supplier_id':supplier_id,
         'quantity':1, 'purchase_price':3000, 'sale_price':10000,
     }]})['data']
-    assert order_id == requested_id
+    assert 0 < order_id <= 99_999_999
 
     order = call('/api/query', {'table':'orders','action':'select','filters':[{'column':'id','op':'eq','value':order_id}], 'nested_items':True})['data'][0]
     assert order['order_items'][0]['purchase_price'] == 3000
@@ -129,6 +126,16 @@ def main():
         {'column':'order_id','op':'eq','value':order_id},{'column':'deleted_at','op':'is','value':None}]})['data']
     assert not active_tx and not active_items
     print('delete_cascade: order=1 items=1 transactions=2 repeat_safe=yes')
+
+    # Не оставляем тестовый заказ в нумерации CRM: после проверки мягкого
+    # удаления физически убираем только созданную этим тестом запись.
+    purged = call('/api/query', {'table':'orders','action':'delete','filters':[
+        {'column':'id','op':'eq','value':order_id}]})['data']
+    assert len(purged) == 1
+    remaining = call('/api/query', {'table':'orders','action':'select','filters':[
+        {'column':'id','op':'eq','value':order_id}]})['data']
+    assert not remaining
+    print('test_cleanup: hard_deleted=yes sequence_clean=yes')
 
 
 if __name__ == '__main__':

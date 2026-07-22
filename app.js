@@ -150,7 +150,7 @@ async function execOp(op) {
         const { data, error } = await SB.rpc('create_order', { p_order: op.order, p_items: op.items || [] });
         if (error) {
             if (error.code === '23505') {           // коллизия id — перегенерируем и повторим
-                op.order.id = nextLocalId(orders);
+                op.order.id = nextLocalOrderId();
                 if (op._orderRef) op._orderRef.id = op.order.id;
                 throw error;
             }
@@ -251,6 +251,14 @@ function sbInsertTransaction(t) { enqueueOp({ t: 'insTx', row: t, _rowRef: t });
 function sbInsertClient(c) { enqueueOp({ t: 'insClient', row: c, _rowRef: c }); }
 function sbInsertSupplier(s) { enqueueOp({ t: 'insSupplier', row: s, _rowRef: s }); }
 function nextLocalId(arr) { return arr.length ? Math.max(...arr.map(x => x.id)) + 1 : 1; }
+// Технические тестовые ID могут быть очень большими. Они не должны влиять на
+// привычную последовательность CRM-04953, CRM-04954 и т. д. Окончательный ID
+// всё равно атомарно назначает сервер, это только безопасный локальный номер.
+const MAX_CRM_ORDER_ID = 99_999_999;
+function nextLocalOrderId() {
+    const ids = orders.map(o => Number(o.id)).filter(id => Number.isInteger(id) && id > 0 && id <= MAX_CRM_ORDER_ID);
+    return ids.length ? Math.max(...ids) + 1 : 1;
+}
 
 // Сервер может заменить занятый локальный ID на следующий свободный. Обновляем
 // объект в памяти и все ещё не отправленные зависимые операции.
@@ -330,6 +338,8 @@ const ORDER_MANAGER_LABELS = {
     olya: 'Оля',
 };
 const orderManagerLabel = key => ORDER_MANAGER_LABELS[key] || 'Не указано';
+const orderManagerInitial = key => key === 'sasha' ? 'С' : key === 'olya' ? 'О' : '?';
+const orderManagerClass = key => key === 'sasha' ? 'is-sasha' : key === 'olya' ? 'is-olya' : 'is-unassigned';
 const orderManagerOptions = (selected = '', includeBlank = true) =>
     `${includeBlank ? `<option value="" ${selected ? '' : 'selected'}>Не указано</option>` : '<option value="">Выберите сотрудника</option>'}` +
     Object.entries(ORDER_MANAGER_LABELS)
@@ -1129,11 +1139,42 @@ function orderColumnCell(key, o, c, supplierNames) {
         case 'phone':
             return `<td class="col-phone" data-label="Телефон">${clientPhone(o.client_id) || '—'}</td>`;
         case 'actions':
-            return `<td class="col-actions" data-label=""><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openOrderDetail(${o.id})">Открыть</button></td>`;
+            return `<td class="col-actions" data-label="">
+                <div class="order-row-actions">
+                    <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openOrderDetail(${o.id})">Открыть</button>
+                    <label class="order-manager-badge ${orderManagerClass(o.manager_key)}"
+                        title="Оформил: ${orderManagerLabel(o.manager_key)}. Нажмите, чтобы изменить"
+                        onclick="event.stopPropagation()">
+                        <span aria-hidden="true">${orderManagerInitial(o.manager_key)}</span>
+                        <select aria-label="Кто оформил заказ ${crmId(o)}"
+                            onchange="changeOrderManagerQuick(${o.id}, this.value, this);event.stopPropagation()">
+                            ${orderManagerOptions(o.manager_key)}
+                        </select>
+                    </label>
+                </div>
+            </td>`;
         default:
             return '';
     }
 }
+
+window.changeOrderManagerQuick = async function(orderId, value, selectEl) {
+    const o = orders.find(x => x.id === orderId);
+    if (!o) return;
+    const next = value || null;
+    const previous = o.manager_key || null;
+    if (next === previous) return;
+    if (selectEl) selectEl.disabled = true;
+    const ok = await sbUpdateOrder(o, { manager_key: next });
+    if (!ok) {
+        if (selectEl) selectEl.disabled = false;
+        renderOrders();
+        return;
+    }
+    o.manager_key = next;
+    renderOrders();
+    dbToast(`Заказ оформил: ${orderManagerLabel(next)}`, true);
+};
 
 let orderColumnsDraft = null;
 
@@ -2911,7 +2952,7 @@ window.saveNewOrder = function() {
     const addrEl = document.getElementById('formDeliveryAddr');
     const clientAddress = addrEl.value.trim();
     const clientId = findOrCreateClient(clientName, clientPhone, clientAddress, addrDataFrom(addrEl));
-    const newId = orders.length ? Math.max(...orders.map(o => o.id)) + 1 : 1;
+    const newId = nextLocalOrderId();
     const deliveryDate = document.getElementById('formDeliveryDate').value || null;
 
     const newOrder = {

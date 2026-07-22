@@ -59,6 +59,7 @@ ssh -i ~/.ssh/beget_ovsyannikov_crm root@212.8.226.97 \
   'python3 /opt/ovsyannikov-crm/deploy/migrate_app_settings.py && \
    python3 /opt/ovsyannikov-crm/deploy/migrate_salary_payments.py && \
    python3 /opt/ovsyannikov-crm/deploy/migrate_order_managers.py && \
+   python3 /opt/ovsyannikov-crm/deploy/migrate_order_ids.py && \
    systemctl restart ovsyannikov-crm && nginx -t && systemctl reload nginx'
 ```
 

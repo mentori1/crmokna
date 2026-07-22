@@ -28,6 +28,7 @@ TABLES = {"clients", "suppliers", "orders", "order_items", "transactions", "sala
 WRITABLE = TABLES - {"audit_log"}
 JSON_COLS = {"address_data", "value", "old_value", "new_value"}
 EVENT_COLS = {"clients", "suppliers", "orders", "transactions", "salary_payments", "app_settings"}
+MAX_CRM_ORDER_ID = 99_999_999
 
 
 def db():
@@ -327,6 +328,7 @@ class Handler(BaseHTTPRequestHandler):
                                     continue
                         if table == "orders":
                             self.validate_order_manager(clean, required=True)
+                            clean["id"] = self.next_order_id(conn)
                         if table in {"clients", "suppliers", "transactions", "salary_payments"} and clean.get("id") is not None:
                             occupied = conn.execute(f"select 1 from {table} where id=?", (clean["id"],)).fetchone()
                             if occupied:
@@ -453,6 +455,17 @@ class Handler(BaseHTTPRequestHandler):
         if manager_key not in {None, "sasha", "olya"}:
             raise ValueError("Неизвестный сотрудник, оформивший заказ")
 
+    @staticmethod
+    def next_order_id(conn):
+        """Allocate the next normal CRM ID, ignoring historical test IDs."""
+        value = conn.execute(
+            "select coalesce(max(id),0)+1 from orders where id between 1 and ?",
+            (MAX_CRM_ORDER_ID,),
+        ).fetchone()[0]
+        if value > MAX_CRM_ORDER_ID:
+            raise ValueError("Закончился диапазон номеров заказов")
+        return value
+
     def create_order(self, req, user):
         order = dict(req.get("order") or {})
         items = req.get("items") or []
@@ -466,8 +479,7 @@ class Handler(BaseHTTPRequestHandler):
                         return self.send_json(200, {"data": existing["id"]})
                 clean = self.clean_row(conn, "orders", order, True, user["id"])
                 self.validate_order_manager(clean, required=True)
-                if conn.execute("select 1 from orders where id=?", (clean.get("id"),)).fetchone():
-                    clean["id"] = conn.execute("select coalesce(max(id),0)+1 from orders").fetchone()[0]
+                clean["id"] = self.next_order_id(conn)
                 cols = list(clean)
                 conn.execute(f"insert into orders ({','.join(cols)}) values ({','.join('?' for _ in cols)})", [clean[c] for c in cols])
                 for item in items:
