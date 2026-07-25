@@ -2627,6 +2627,12 @@ window.deleteOlaSalaryPayment = async function(paymentId) {
     dbToast('Запись удалена', true);
 };
 
+function setFinanceMonth(month) {
+    window.finMonth = month || '';
+    localStorage.setItem('finance_month', window.finMonth);
+    renderFinances();
+}
+
 function renderFinances() {
     const savedTransactions = transactions.filter(t => !t._pending);
 
@@ -2663,12 +2669,23 @@ function renderFinances() {
     const finMonthsBox = document.getElementById('finMonths');
     finMonthsBox.innerHTML = html;
     finMonthsBox.querySelectorAll('.cat-item').forEach(btn => {
-        btn.addEventListener('click', () => {
-            window.finMonth = btn.dataset.fmonth;
-            localStorage.setItem('finance_month', window.finMonth);
-            renderFinances();
-        });
+        btn.addEventListener('click', () => setFinanceMonth(btn.dataset.fmonth));
     });
+    const finMonthSelect = document.getElementById('finMonthSelect');
+    if (finMonthSelect) {
+        const mobileMonths = window.finMonth && !months.includes(window.finMonth)
+            ? [window.finMonth, ...months]
+            : months;
+        finMonthSelect.innerHTML = [
+            `<option value="">Всё время · ${fmtCur(totalAll)}</option>`,
+            ...mobileMonths.map(value => {
+                const year = value.slice(0, 4);
+                const monthNumber = +value.slice(5, 7);
+                return `<option value="${value}">${MONTH_NAMES_FULL[monthNumber - 1]} ${year} · ${fmtCur(monthSum[value] || 0)}</option>`;
+            }),
+        ].join('');
+        finMonthSelect.value = window.finMonth;
+    }
     // Подсветка активной кнопки Все/Доходы/Расходы
     document.querySelectorAll('#finTypeToggle .fin-tab').forEach(b =>
         b.classList.toggle('active', (b.dataset.fintype || '') === type));
@@ -2699,6 +2716,9 @@ window.finType = window.finType || '';    // '', income, expense
 window.finMonth = typeof window.finMonth === 'string'
     ? window.finMonth
     : (localStorage.getItem('finance_month') || '');   // '', 'YYYY-MM'
+document.getElementById('finMonthSelect')?.addEventListener('change', event => {
+    setFinanceMonth(event.target.value);
+});
 // Переключатель Все / Доходы / Расходы
 document.querySelectorAll('#finTypeToggle .fin-tab').forEach(btn => {
     btn.addEventListener('click', () => {

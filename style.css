@@ -412,6 +412,7 @@ body.modal-open { overflow: hidden; }
 
 /* Финансы: месяцы по годам (вертикально) */
 #finMonths { flex-basis: 200px; }
+.finance-mobile-month { display: none; }
 /* Таблица операций: фиксированная раскладка — не скроллится, длинный текст переносится */
 #financeTable { table-layout: fixed; }
 #financeTable th, #financeTable td { padding-left: 10px; padding-right: 10px; }
@@ -1311,9 +1312,12 @@ body.modal-open { overflow: hidden; }
 
 /* ─── Телефон (≤560px) ─────────────────────────────────── */
 @media (max-width: 560px) {
-    html { font-size: 15px; }
+    html { font-size: 15px; overflow-x: hidden; }
+    body { max-width: 100%; overflow-x: hidden; }
 
-    #ordersTable { min-width: 0; }
+    #ordersTable,
+    #deliveryTable,
+    #financeTable { min-width: 0; width: 100%; max-width: 100%; table-layout: auto; }
     #ordersTable .col-client,
     #ordersTable .col-phone { border-left: none; }
 
@@ -1347,6 +1351,20 @@ body.modal-open { overflow: hidden; }
     .filter-group { width: 100%; }
     .filter-group select,
     .filter-group input { flex: 1; }
+    #section-orders .order-period-filter {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        gap: 6px;
+        min-width: 0;
+    }
+    #section-orders .order-period-filter label {
+        grid-column: 1 / -1;
+    }
+    #section-orders .order-period-filter input {
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+    }
     .orders-toolbar { flex-direction: column; align-items: stretch; }
     .orders-toolbar .btn { width: 100%; justify-content: center; }
     .finance-header-actions { flex-direction: column; }
@@ -1361,6 +1379,7 @@ body.modal-open { overflow: hidden; }
     .data-table tbody { display: block; }
     .data-table tbody tr {
         display: block;
+        width: 100%; max-width: 100%; box-sizing: border-box;
         background: #fff;
         border: 1px solid var(--slate-200);
         border-radius: 12px;
@@ -1370,6 +1389,7 @@ body.modal-open { overflow: hidden; }
     }
     .data-table tbody td {
         display: flex;
+        width: auto !important; max-width: 100%; box-sizing: border-box;
         justify-content: space-between;
         align-items: center;
         gap: 14px;
@@ -1410,6 +1430,270 @@ body.modal-open { overflow: hidden; }
         display: block; text-align: center; border: none;
     }
     .data-table tbody td.empty-state::before { display: none; }
+
+    .content,
+    .section,
+    .products-layout,
+    .product-main,
+    .table-wrapper,
+    .data-table,
+    .data-table tbody {
+        width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box;
+    }
+
+    /* Заказы: плотная двухколоночная карточка без десктопных ширин. */
+    #section-orders .orders-toolbar {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    }
+    #section-orders .orders-toolbar .btn {
+        width: 100%; min-width: 0; padding: 8px 7px; font-size: 11px;
+    }
+    #ordersBody tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+        padding: 9px;
+    }
+    #ordersBody td {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 2px;
+        padding: 7px 9px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--slate-50);
+        text-align: left;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+        word-break: normal;
+    }
+    #ordersBody td::before {
+        display: block;
+        margin: 0 0 2px;
+        font-size: 9px;
+        line-height: 1.15;
+    }
+    #ordersBody .col-date,
+    #ordersBody .col-number {
+        min-height: 50px;
+        font-size: 13px;
+        font-weight: 700;
+    }
+    #ordersBody .col-supplier,
+    #ordersBody .col-delivery,
+    #ordersBody .col-client,
+    #ordersBody .col-phone,
+    #ordersBody .col-actions {
+        grid-column: 1 / -1;
+    }
+    #ordersBody .col-client {
+        font-size: 15px;
+        font-weight: 650;
+        color: var(--slate-900);
+    }
+    #ordersBody .col-phone { font-size: 13px; white-space: normal; }
+    #ordersTable #ordersBody .col-number,
+    #ordersTable #ordersBody .col-supplier,
+    #ordersTable #ordersBody .col-client {
+        word-break: normal;
+        overflow-wrap: anywhere;
+    }
+    #ordersBody .col-delivery {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+    #ordersBody .col-delivery::before { margin: 0; }
+    #ordersBody .col-delivery .btn { width: auto; padding: 7px 12px; }
+    #ordersBody .col-actions {
+        padding: 4px 0 0;
+        background: transparent;
+    }
+    #ordersBody .col-actions::before { display: none; }
+    #ordersBody .order-row-actions { width: 100%; justify-content: stretch; }
+    #ordersBody .order-row-actions > .btn { flex: 1; min-height: 38px; }
+    #ordersBody td.empty-state {
+        grid-column: 1 / -1;
+        background: #fff;
+    }
+
+    /* Доставка: карточка заказа занимает всю ширину, действия остаются видимыми. */
+    #section-delivery .section-header { gap: 8px; margin-bottom: 10px; }
+    #section-delivery .delivery-print-actions {
+        display: grid; grid-template-columns: 1fr 1fr; width: 100%; gap: 8px;
+    }
+    #section-delivery .delivery-print-actions .btn {
+        width: 100%; min-width: 0; padding: 8px 6px; font-size: 11px;
+    }
+    #deliveryBody tr {
+        display: grid;
+        grid-template-columns: minmax(92px, auto) minmax(0, 1fr);
+        gap: 0 10px;
+        padding: 10px 12px;
+    }
+    #deliveryBody td {
+        min-width: 0;
+        padding: 7px 0;
+        text-align: left;
+        overflow-wrap: anywhere;
+        word-break: normal;
+    }
+    #deliveryBody .delivery-select-col {
+        grid-column: 1;
+        justify-content: flex-start;
+        text-align: left;
+    }
+    #deliveryBody td[data-label="№ заказа"] {
+        grid-column: 2;
+        justify-content: flex-end;
+        font-size: 15px;
+    }
+    #deliveryBody td[data-label="Осталось получить"],
+    #deliveryBody td[data-label="Телефон"],
+    #deliveryBody td[data-label="Адрес"],
+    #deliveryBody .delivery-actions {
+        grid-column: 1 / -1;
+    }
+    #deliveryBody .delivery-actions {
+        display: flex;
+        flex-direction: row;
+        align-items: stretch;
+        gap: 6px;
+        padding-top: 9px;
+    }
+    #deliveryBody .delivery-actions .btn {
+        flex: 1;
+        width: auto;
+        min-width: 0;
+        padding: 8px 5px;
+        font-size: 11px;
+    }
+    #deliveryBody td.empty-state { grid-column: 1 / -1; }
+
+    /* Финансы: месяцы в одном select, операции в коротких карточках. */
+    #section-finances .section-header { gap: 8px; margin-bottom: 10px; }
+    #section-finances .section-header h2 { font-size: 16px; }
+    #section-finances .finance-header-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        width: 100%;
+        gap: 8px;
+    }
+    #section-finances .finance-header-actions .btn {
+        width: 100%; min-width: 0; padding: 8px 7px; font-size: 12px;
+    }
+    #section-finances .fin-toggle {
+        display: grid;
+        grid-template-columns: .72fr .9fr 1.38fr;
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    #section-finances .fin-tab {
+        min-width: 0;
+        padding: 7px 5px;
+        font-size: 11px;
+        line-height: 1.15;
+    }
+    .finance-mobile-month {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+        padding: 9px 11px;
+        border: 1px solid var(--slate-200);
+        border-radius: 10px;
+        background: #fff;
+    }
+    .finance-mobile-month label {
+        flex: 0 0 auto;
+        color: var(--slate-500);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .finance-mobile-month select {
+        flex: 1;
+        min-width: 0;
+        padding: 7px 9px;
+        border: 1px solid var(--slate-300);
+        border-radius: 8px;
+        background: #fff;
+        font-size: 13px;
+    }
+    #finMonths { display: none !important; }
+    #section-finances .products-layout { display: block; }
+    #financeTable td { width: auto !important; }
+    #financeBody tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 5px 12px;
+        padding: 11px 12px;
+    }
+    #financeBody td {
+        display: block;
+        min-width: 0;
+        padding: 0;
+        border: 0;
+        text-align: left;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: normal;
+    }
+    #financeBody td::before { display: none; }
+    #financeBody td[data-label="Дата"] {
+        grid-column: 1;
+        grid-row: 1;
+        color: var(--slate-500);
+        font-size: 11px;
+    }
+    #financeBody td[data-label="Тип"] {
+        grid-column: 2;
+        grid-row: 1;
+        text-align: right;
+    }
+    #financeBody td[data-label="Контрагент"] {
+        grid-column: 1;
+        grid-row: 2;
+        color: var(--slate-900);
+        font-size: 14px;
+        font-weight: 650;
+    }
+    #financeBody td[data-label="Заказ"] {
+        grid-column: 1;
+        grid-row: 3;
+        color: var(--slate-600);
+        font-size: 11px;
+    }
+    #financeBody td[data-label="Заказ"]::before {
+        content: 'Заказ ';
+        display: inline;
+        color: var(--slate-400);
+        font-size: 10px;
+        font-weight: 500;
+        text-transform: none;
+    }
+    #financeBody td[data-label="Приход"],
+    #financeBody td[data-label="Расход"] {
+        grid-column: 2;
+        grid-row: 2 / span 2;
+        align-self: center;
+        text-align: right;
+        font-size: 17px;
+        font-weight: 750;
+        white-space: nowrap;
+    }
+    #financeBody td[data-label="Описание"] {
+        grid-column: 1 / -1;
+        grid-row: 4;
+        padding-top: 5px;
+        border-top: 1px solid var(--slate-100);
+        color: var(--slate-500);
+        font-size: 11px;
+        line-height: 1.3;
+    }
 
     /* ── Модалка: отступы по краям, скругление, высота почти на весь
           экран (dvh — учитывает адресную строку Safari) ── */

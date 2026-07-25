@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Центр окон и дверей — CRM</title>
-    <link rel="stylesheet" href="style.css?v=81">
+    <link rel="stylesheet" href="style.css?v=83">
 </head>
 <body>
 
@@ -224,7 +224,7 @@
                         <option value="closed">Закрыт</option>
                     </select>
                 </div>
-                <div class="filter-group">
+                <div class="filter-group order-period-filter">
                     <label>Период:</label>
                     <input type="date" id="filterDateFrom">
                     <span>—</span>
@@ -323,6 +323,10 @@
                 <button class="fin-tab active" data-fintype="">Все</button>
                 <button class="fin-tab" data-fintype="income">Приходы</button>
                 <button class="fin-tab" data-fintype="expense">Оплаты поставщикам</button>
+            </div>
+            <div class="finance-mobile-month">
+                <label for="finMonthSelect">Период</label>
+                <select id="finMonthSelect" aria-label="Месяц финансов"></select>
             </div>
             <div class="products-layout">
                 <aside class="product-cats" id="finMonths"></aside>
@@ -442,6 +446,6 @@
 })();
 </script>
 <script src="supabase-local.js?v=54"></script>
-<script src="app.js?v=81"></script>
+<script src="app.js?v=83"></script>
 </body>
 </html>
