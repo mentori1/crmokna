@@ -5,6 +5,29 @@ sanya-498120-cee43b3a5917.json
 # Бэкап реальных данных Овсянникова — приватно
 data_real_backup/
 
+# Боевые выгрузки CRM содержат ПДн и финансовую историю
+data/*.json
+!data/README.md
+
+# Бэкапы, дампы и файлы локальных баз никогда не храним в Git
+backups/
+*.sqlite
+*.sqlite3
+*.sqlite.gz
+*.db
+*.db-wal
+*.db-shm
+*.dump
+*.bak
+*.backup
+
+# Локальные секреты и окружение
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
 # OS junk
 .DS_Store
 Thumbs.db
